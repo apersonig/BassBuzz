@@ -2,6 +2,7 @@
 
 Plays an MP3 (or any audio file Android can decode) and makes the phone's vibration motor follow the bass.
 Built for a Pixel 10 Pro XL (LRA motor, amplitude control), but works on any Android 12+ phone with a vibrator.
+The frequency tester needs Android 16 for true frequency control (older versions get pulse mode only).
 
 ## How it works
 
@@ -34,6 +35,11 @@ Built for a Pixel 10 Pro XL (LRA motor, amplitude control), but works on any And
   will come first: lower it (negative values) until kicks and thumps line up.
 - **Bass range**: the low-pass cutoff. Lower = only sub-bass, higher = includes bass guitar and
   the body of kick drums. Releasing the slider re-analyses the song.
+- **Frequency tester** (bottom of the app): a 1-500 Hz slider (plus -10/-1/+1/+10 buttons) that drives the
+  motor directly while **Start vibration** is on. On Android 16 it asks the motor for exactly that frequency,
+  and the app shows the motor's real range and strongest frequency. Below the motor's range it pulses the
+  motor's own buzz on/off at that rate (the only way to feel 1-30 Hz); above the range nothing can play.
+  Starting the tester pauses the music, and pressing Play stops the tester.
 - **Compatibility mode**: switch on if you feel nothing at all. It sends the vibration on the alarm
   channel, which ignores the "media vibration" setting. Also check Settings -> Sound & vibration ->
   Vibration & haptics, and that battery saver is off.

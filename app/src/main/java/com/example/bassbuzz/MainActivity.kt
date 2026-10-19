@@ -32,6 +32,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var player: HapticPlayer
+    private lateinit var tester: FrequencyTester
+    private lateinit var testToggle: Button
+    private lateinit var testFreqLabel: TextView
+    private lateinit var testPlanLabel: TextView
+    private lateinit var testBar: SeekBar
+    private var testHz = 170
     private lateinit var envelope: EnvelopeView
     private lateinit var fileLabel: TextView
     private lateinit var statusLabel: TextView
@@ -61,6 +67,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         player = HapticPlayer(applicationContext)
+        tester = FrequencyTester(applicationContext).also { t ->
+            t.onError = { msg ->
+                runOnUiThread {
+                    setStatus(msg)
+                    refreshTestUi()
+                }
+            }
+        }
         setContentView(buildUi())
         ui.post(ticker)
         setStatus(
@@ -76,12 +90,14 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Haptics are only reliable while the app is in front, so stop everything when leaving.
         if (player.isPlaying) togglePlay()
+        stopTester()
     }
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         analysisGen += 1
         io.shutdownNow()
+        tester.release()
         player.release()
         super.onDestroy()
     }
@@ -175,7 +191,10 @@ class MainActivity : ComponentActivity() {
             Switch(this).apply {
                 text = "Compatibility mode (use if you feel nothing)"
                 setTextColor(TEXT)
-                setOnCheckedChangeListener { _, on -> player.compat = on }
+                setOnCheckedChangeListener { _, on ->
+                    player.compat = on
+                    tester.compat = on
+                }
             },
         )
         col.gap(12)
@@ -188,6 +207,8 @@ class MainActivity : ComponentActivity() {
         )
         col.gap(12)
         col.addView(label("Keep the app in front while playing: the screen stays on and haptics pause if you leave.", 12f, MUTED))
+
+        addFrequencyTester(col)
 
         return ScrollView(this).apply {
             clipToPadding = false
@@ -262,10 +283,110 @@ class MainActivity : ComponentActivity() {
             playButton.text = "Play"
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
+            stopTester() // the tester and the music would fight over the motor
             player.play()
             playButton.text = "Pause"
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+
+    // ---------------------------------------------------------------- frequency tester
+
+    private fun addFrequencyTester(col: LinearLayout) {
+        col.gap(28)
+        col.addView(label("Frequency tester", 18f, bold = true))
+        col.gap(4)
+        col.addView(label(tester.motorInfo(), 12f, MUTED))
+        col.gap(12)
+
+        testFreqLabel = label("", 34f, bold = true)
+        col.addView(testFreqLabel)
+        testPlanLabel = label("", 13f, MUTED)
+        col.addView(testPlanLabel)
+        col.gap(8)
+
+        testBar = SeekBar(this).apply {
+            max = TEST_MAX_HZ - TEST_MIN_HZ
+            progress = testHz - TEST_MIN_HZ
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    if (fromUser) setTestHz(p + TEST_MIN_HZ)
+                }
+
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {}
+            })
+        }
+        col.addView(testBar, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        val range = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        range.addView(label("$TEST_MIN_HZ Hz", 12f, MUTED), LinearLayout.LayoutParams(0, WRAP, 1f))
+        range.addView(label("$TEST_MAX_HZ Hz", 12f, MUTED))
+        col.addView(range, LinearLayout.LayoutParams(MATCH, WRAP))
+        col.gap(8)
+
+        val fine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun step(text: String, delta: Int) = Button(this).apply {
+            this.text = text
+            setOnClickListener { setTestHz(testHz + delta) }
+        }
+        fine.addView(step("-10", -10), LinearLayout.LayoutParams(0, WRAP, 1f))
+        fine.addView(step("-1", -1), LinearLayout.LayoutParams(0, WRAP, 1f))
+        fine.addView(step("+1", 1), LinearLayout.LayoutParams(0, WRAP, 1f))
+        fine.addView(step("+10", 10), LinearLayout.LayoutParams(0, WRAP, 1f))
+        col.addView(fine, LinearLayout.LayoutParams(MATCH, WRAP))
+        col.gap(8)
+
+        col.addView(
+            Button(this).apply {
+                text = "Start vibration"
+                testToggle = this
+                setOnClickListener { toggleTester() }
+            },
+            LinearLayout.LayoutParams(MATCH, WRAP),
+        )
+        col.gap(10)
+        addSlider(col, "Test strength", 0.05f, 1f, tester.strength, { "${(it * 100).toInt()}%" }, {
+            tester.strength = it
+            tester.update()
+        })
+        col.gap(16)
+
+        tester.frequencyHz = testHz.toFloat()
+        refreshTestUi()
+    }
+
+    private fun setTestHz(hz: Int) {
+        testHz = hz.coerceIn(TEST_MIN_HZ, TEST_MAX_HZ)
+        if (testBar.progress != testHz - TEST_MIN_HZ) testBar.progress = testHz - TEST_MIN_HZ
+        tester.frequencyHz = testHz.toFloat()
+        tester.update()
+        refreshTestUi()
+    }
+
+    private fun refreshTestUi() {
+        testFreqLabel.text = "$testHz Hz"
+        testPlanLabel.text = tester.planFor(testHz.toFloat()).text
+        testToggle.text = if (tester.active) "Stop vibration" else "Start vibration"
+    }
+
+    private fun toggleTester() {
+        if (tester.active) {
+            stopTester()
+        } else {
+            if (player.isPlaying) togglePlay()
+            tester.frequencyHz = testHz.toFloat()
+            tester.start()
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            refreshTestUi()
+        }
+    }
+
+    private fun stopTester() {
+        if (!tester.active) return
+        tester.stop()
+        if (!player.isPlaying) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        refreshTestUi()
     }
 
     private fun displayName(uri: Uri): String {
