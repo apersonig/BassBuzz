@@ -40,6 +40,11 @@ The frequency tester needs Android 16 for true frequency control (older versions
   and the app shows the motor's real range and strongest frequency. Below the motor's range it pulses the
   motor's own buzz on/off at that rate (the only way to feel 1-30 Hz); above the range nothing can play.
   Starting the tester pauses the music, and pressing Play stops the tester.
+  **Subwoofer roll-off** (on by default) makes the tester get quieter toward low frequencies, like a real
+  subwoofer: full strength well above the corner (default 60 Hz), -3 dB at the corner, then -12 dB per octave
+  below it. **Above the motor's range** can be Silent, Clamp to max (plays the motor's highest frequency), or
+  Force anyway (asks Android for the exact frequency; the docs say Android usually plays nothing out of range,
+  so switch to Clamp if you feel nothing).
 - **Compatibility mode**: switch on if you feel nothing at all. It sends the vibration on the alarm
   channel, which ignores the "media vibration" setting. Also check Settings -> Sound & vibration ->
   Vibration & haptics, and that battery saver is off.

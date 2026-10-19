@@ -13,6 +13,8 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Space
@@ -350,6 +352,54 @@ class MainActivity : ComponentActivity() {
             tester.strength = it
             tester.update()
         })
+
+        col.addView(
+            Switch(this).apply {
+                text = "Subwoofer roll-off (quieter at low frequencies)"
+                setTextColor(TEXT)
+                isChecked = tester.rolloffEnabled
+                setOnCheckedChangeListener { _, on ->
+                    tester.rolloffEnabled = on
+                    tester.update()
+                    refreshTestUi()
+                }
+            },
+        )
+        col.gap(8)
+        addSlider(col, "Roll-off corner (-12 dB per octave below it)", 20f, 300f, tester.rolloffCornerHz, { "${it.toInt()} Hz" }, {
+            tester.rolloffCornerHz = it
+            tester.update()
+            refreshTestUi()
+        })
+
+        col.addView(label("Above the motor's range", 14f))
+        col.gap(4)
+        val choices = listOf(
+            "Silent" to AboveRange.SILENT,
+            "Clamp to max" to AboveRange.CLAMP,
+            "Force anyway" to AboveRange.FORCE,
+        )
+        col.addView(
+            RadioGroup(this).apply {
+                orientation = RadioGroup.HORIZONTAL
+                choices.forEachIndexed { i, (name, mode) ->
+                    addView(
+                        RadioButton(this@MainActivity).apply {
+                            id = 1000 + i
+                            text = name
+                            setTextColor(TEXT)
+                            isChecked = tester.aboveRange == mode
+                        },
+                    )
+                }
+                setOnCheckedChangeListener { _, id ->
+                    val picked = choices.getOrNull(id - 1000) ?: return@setOnCheckedChangeListener
+                    tester.aboveRange = picked.second
+                    tester.update()
+                    refreshTestUi()
+                }
+            },
+        )
         col.gap(16)
 
         tester.frequencyHz = testHz.toFloat()
