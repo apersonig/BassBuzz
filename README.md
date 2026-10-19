@@ -1,0 +1,59 @@
+# BassBuzz
+
+Plays an MP3 (or any audio file Android can decode) and makes the phone's vibration motor follow the bass.
+Built for a Pixel 10 Pro XL (LRA motor, amplitude control), but works on any Android 12+ phone with a vibrator.
+
+## How it works
+
+1. **Convert**: the file is decoded with `MediaCodec`, mixed to mono, and run through a 4th-order
+   Butterworth low-pass (default 120 Hz). The loudness of what's left is measured every 20 ms
+   and stored as the bass envelope (this is the "haptic track"; the waveform you see in the app).
+2. **Play**: `MediaPlayer` plays the audio. Every 200 ms a background thread reads the audio position and
+   sends the motor the next ~240 ms of the envelope as a `VibrationEffect.createWaveform` (20 ms steps,
+   amplitude 1-255). Because each chunk is computed from the live audio position, haptics can't drift.
+3. **Feel**: an LRA resonates at one fixed frequency (~150-200 Hz), so it can't reproduce a 50 Hz tone itself.
+   Instead its *strength* follows the bass level, and sharp rises (kick drums, bass hits) get an extra "punch".
+
+## Build
+
+**Android Studio**: open this folder, let Gradle sync, plug in the phone (USB debugging on), press Run.
+
+**Command line**: `./gradlew assembleDebug` -> `app/build/outputs/apk/debug/app-debug.apk`, then
+`adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+
+**No dev tools**: push this folder to a GitHub repo; the included workflow builds the APK
+(Actions tab -> latest run -> Artifacts -> `BassBuzz-debug-apk`). Download it on the phone and install.
+
+## Using it
+
+- **Open audio file**, wait for "Ready", press **Play**.
+- **Test motor** plays a rising buzz and three hits, a quick way to check your settings.
+- **Intensity**: overall strength. **Noise gate**: bass below this level stays silent (raise it if quiet
+  passages buzz too much). **Punch**: extra kick on drum hits.
+- **Timing**: if the buzz comes after the sound, raise it. Bluetooth earbuds delay the audio, so the buzz
+  will come first: lower it (negative values) until kicks and thumps line up.
+- **Bass range**: the low-pass cutoff. Lower = only sub-bass, higher = includes bass guitar and
+  the body of kick drums. Releasing the slider re-analyses the song.
+- **Compatibility mode**: switch on if you feel nothing at all. It sends the vibration on the alarm
+  channel, which ignores the "media vibration" setting. Also check Settings -> Sound & vibration ->
+  Vibration & haptics, and that battery saver is off.
+
+## Limits
+
+- Haptics only run while the app is on screen (the screen is kept awake while playing). Playing with the
+  screen off would need a foreground service, which isn't included.
+- Timing is ~20 ms granular and the motor has a little spin-up lag, so it's a feel of the bass, not a
+  sample-accurate reproduction.
+- Not yet compiled on a device in the environment this was written in; if Gradle reports a compile error,
+  paste it back and it's a quick fix.
+
+## Layout
+
+```
+app/src/main/java/com/example/bassbuzz/
+  AudioDecoder.kt   MediaCodec decode to mono PCM
+  BassAnalyzer.kt   low-pass filter, envelope, onset detection
+  HapticPlayer.kt   MediaPlayer + synced vibration chunks + mapping to amplitude
+  EnvelopeView.kt   waveform display and scrubbing
+  MainActivity.kt   UI
+```
