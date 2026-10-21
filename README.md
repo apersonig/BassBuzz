@@ -6,6 +6,10 @@ Two apps and a shared library:
   `.bbz` haptic file** (the song plus its bass envelope, see `docs/FORMAT.md`).
 - **BassBuzz Player** (`player/`): opens `.bbz` files and plays them with haptics, **in the background and
   with the screen off**, with notification and lock-screen controls.
+- **LDAF Scope** (`ldaf/`): a separate experiment that uses the Pixel's laser autofocus as a rangefinder.
+  Android doesn't give apps the raw laser sensor, so it reads the camera's autofocus distance (which the
+  phone steers with the laser), shows it live, plots a top-down scan map as you sweep the phone around, and
+  has a device explorer that dumps every sensor and camera key so the laser can be hunted for.
 - **core** (`core/`): the shared engine and the `.bbz` reader/writer, with unit tests.
 
 Plays an MP3 (or any audio file Android can decode) and makes the phone's vibration motor follow the bass.

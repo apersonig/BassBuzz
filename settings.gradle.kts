@@ -18,3 +18,4 @@ rootProject.name = "BassBuzz"
 include(":core")
 include(":app")
 include(":player")
+include(":ldaf")
