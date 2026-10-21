@@ -93,8 +93,12 @@ class HapticTrack(val level: FloatArray, val flux: FloatArray) {
             val idx = ((sorted.size - 1) * 0.98).toInt()
             // Floor keeps tracks with no real bass from being blown up into noise.
             val ref = maxOf(sorted[idx], 0.003f)
-            val level = FloatArray(rms.size) { minOf(rms[it] / ref, 1.5f) }
-            val flux = FloatArray(rms.size) { if (it == 0) 0f else maxOf(0f, level[it] - level[it - 1]) }
+            return fromLevels(FloatArray(rms.size) { minOf(rms[it] / ref, 1.5f) })
+        }
+
+        /** Rebuilds a track from stored levels (e.g. read from a .bbz file); flux is derived from them. */
+        fun fromLevels(level: FloatArray): HapticTrack {
+            val flux = FloatArray(level.size) { if (it == 0) 0f else maxOf(0f, level[it] - level[it - 1]) }
             return HapticTrack(level, flux)
         }
     }

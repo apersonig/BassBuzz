@@ -6,6 +6,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -124,6 +125,12 @@ class HapticPlayer(private val context: Context) {
         stopInternal()
         val mp = MediaPlayer()
         mp.setAudioAttributes(mediaAttrs)
+        try {
+            // Keeps the CPU running with the screen off so the haptics stay in step. Needs the WAKE_LOCK
+            // permission; apps without it just skip this.
+            mp.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
+        } catch (e: Exception) {
+        }
         try {
             mp.setDataSource(context, uri)
         } catch (e: Exception) {

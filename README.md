@@ -1,5 +1,13 @@
 # BassBuzz
 
+Two apps and a shared library:
+
+- **BassBuzz** (`app/`): analyses a song, plays it with haptics, has the frequency tester, and **exports a
+  `.bbz` haptic file** (the song plus its bass envelope, see `docs/FORMAT.md`).
+- **BassBuzz Player** (`player/`): opens `.bbz` files and plays them with haptics, **in the background and
+  with the screen off**, with notification and lock-screen controls.
+- **core** (`core/`): the shared engine and the `.bbz` reader/writer, with unit tests.
+
 Plays an MP3 (or any audio file Android can decode) and makes the phone's vibration motor follow the bass.
 Built for a Pixel 10 Pro XL (LRA motor, amplitude control), but works on any Android 12+ phone with a vibrator.
 The frequency tester needs Android 16 for true frequency control (older versions get pulse mode only).
@@ -68,3 +76,13 @@ app/src/main/java/com/example/bassbuzz/
   EnvelopeView.kt   waveform display and scrubbing
   MainActivity.kt   UI
 ```
+
+## Exporting and the Player
+
+In BassBuzz, load a song, wait for "Ready", then tap **Export haptic file (.bbz)** and pick where to save it.
+Copy that file to any phone with **BassBuzz Player** and open it from the app (or "Open with" in a file
+manager). Player settings (intensity, gate, punch, timing, background-proof mode) are remembered.
+
+Background playback uses a foreground media service, so Android keeps it alive with the screen off or the
+app closed, and the notification has Pause/Play and Stop. If music continues but the motor stops once the
+screen is off, turn on **Background-proof mode**, which sends the vibration on the alarm channel.

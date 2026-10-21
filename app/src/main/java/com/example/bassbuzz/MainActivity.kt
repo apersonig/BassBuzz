@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var statusLabel: TextView
     private lateinit var timeLabel: TextView
     private lateinit var playButton: Button
+    private lateinit var exportButton: Button
+    private var analyzedCutoff = 120
 
     private val ui = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -57,6 +59,12 @@ class MainActivity : ComponentActivity() {
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadFile(uri)
+    }
+
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null) exportTo(uri)
     }
 
     private val ticker = object : Runnable {
@@ -154,6 +162,12 @@ class MainActivity : ComponentActivity() {
             setOnClickListener { togglePlay() }
         }
         col.addView(playButton, LinearLayout.LayoutParams(MATCH, WRAP))
+        exportButton = Button(this).apply {
+            text = "Export haptic file (.bbz)"
+            isEnabled = false
+            setOnClickListener { startExport() }
+        }
+        col.addView(exportButton, LinearLayout.LayoutParams(MATCH, WRAP))
         col.gap(8)
         statusLabel = label("", 13f, MUTED)
         col.addView(statusLabel)
@@ -289,6 +303,46 @@ class MainActivity : ComponentActivity() {
             player.play()
             playButton.text = "Pause"
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    // ---------------------------------------------------------------- export
+
+    private fun startExport() {
+        val src = currentUri ?: return
+        if (player.track == null) return
+        exportLauncher.launch("${displayName(src).substringBeforeLast('.')}.${HapticFile.EXTENSION}")
+    }
+
+    /** Writes the song and its bass envelope into one .bbz file at [dest]. */
+    private fun exportTo(dest: Uri) {
+        val src = currentUri ?: return
+        val track = player.track ?: return
+        val name = displayName(src)
+        val title = name.substringBeforeLast('.')
+        val ext = name.substringAfterLast('.', "mp3")
+        val cutoff = analyzedCutoff
+
+        exportButton.isEnabled = false
+        setStatus("Exporting…")
+        io.execute {
+            try {
+                val audio = contentResolver.openInputStream(src)?.use { it.readBytes() }
+                    ?: throw DecodeException("Couldn't read the original file")
+                if (audio.size > 200 * 1024 * 1024) throw DecodeException("File is too large to export (over 200 MB)")
+                val out = contentResolver.openOutputStream(dest, "w")
+                    ?: throw DecodeException("Couldn't write to the chosen location")
+                out.use { HapticFile.write(it.buffered(), title, ext, cutoff, track.level, audio) }
+                runOnUiThread {
+                    exportButton.isEnabled = true
+                    setStatus("Saved haptic file (%.1f MB). Open it in BassBuzz Player.".format(audio.size / 1048576f))
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    exportButton.isEnabled = true
+                    setStatus("Export failed: ${e.message ?: e.javaClass.simpleName}")
+                }
+            }
         }
     }
 
@@ -455,6 +509,7 @@ class MainActivity : ComponentActivity() {
         fileLabel.text = displayName(uri)
         timeLabel.text = "0:00 / 0:00"
         playButton.isEnabled = false
+        exportButton.isEnabled = false
         playButton.text = "Play"
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -480,6 +535,7 @@ class MainActivity : ComponentActivity() {
         analysisGen += 1
         val gen = analysisGen
         val cutoff = cutoffHz
+        exportButton.isEnabled = false
         setStatus("Analyzing bass…")
 
         io.execute {
@@ -510,6 +566,8 @@ class MainActivity : ComponentActivity() {
                     if (gen == analysisGen) {
                         player.track = result
                         envelope.levels = result.level
+                        analyzedCutoff = cutoff
+                        exportButton.isEnabled = true
                         setStatus("Ready. The motor follows the bass up to $cutoff Hz.")
                     }
                 }
