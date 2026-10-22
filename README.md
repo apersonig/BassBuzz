@@ -10,6 +10,11 @@ Two apps and a shared library:
   Android doesn't give apps the raw laser sensor, so it reads the camera's autofocus distance (which the
   phone steers with the laser), shows it live, plots a top-down scan map as you sweep the phone around, and
   has a device explorer that dumps every sensor and camera key so the laser can be hunted for.
+- **Ultrasonic Tone** (`ultrasonic/`): plays a pure sine through the speaker from 1 kHz up to just under half the
+  phone's output rate (24 kHz on a 48 kHz phone), as a steady tone, a repeating sweep, or pulsed. Volume is
+  eased in and out so it doesn't click, the volume is capped when sound isn't going to the phone speaker, and
+  it stops when you leave the app. An optional **mic check** measures the tone against the background noise
+  (Goertzel), because you can't hear the thing you're testing.
 - **core** (`core/`): the shared engine and the `.bbz` reader/writer, with unit tests.
 
 Plays an MP3 (or any audio file Android can decode) and makes the phone's vibration motor follow the bass.

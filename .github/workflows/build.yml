@@ -16,7 +16,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - name: Unit tests and build
-        run: ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest assembleDebug --no-daemon
+        run: ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest :ultrasonic:testDebugUnitTest assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: BassBuzz-debug-apk
@@ -29,6 +29,10 @@ jobs:
         with:
           name: LDAF-Scope-debug-apk
           path: ldaf/build/outputs/apk/debug/ldaf-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ultrasonic-Tone-debug-apk
+          path: ultrasonic/build/outputs/apk/debug/ultrasonic-debug.apk
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
