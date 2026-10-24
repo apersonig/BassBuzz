@@ -16,6 +16,11 @@ class Prefs(context: Context) {
         get() = sp.getInt("order", 0)
         set(v) = sp.edit().putInt("order", v).apply()
 
+    /** 0 = compact, 1 = normal, 2 = roomy. Spacing also scales with the screen width. */
+    var spacing: Int
+        get() = sp.getInt("spacing", 1)
+        set(v) = sp.edit().putInt("spacing", v).apply()
+
     var snap: Boolean
         get() = sp.getBoolean("snap", true)
         set(v) = sp.edit().putBoolean("snap", v).apply()

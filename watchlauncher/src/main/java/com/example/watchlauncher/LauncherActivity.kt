@@ -107,7 +107,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     }
 
     private fun reload() {
-        val px = (grid.iconPx).toInt().coerceIn(96, 320)
+        val px = HoneycombView.maxIconPx(resources.displayMetrics.widthPixels).coerceIn(96, 400)
         repo.load(px, onList = {
             apps = it
             grid.setApps(it)
@@ -151,6 +151,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     }
 
     private fun applySettings() {
+        grid.setSpacingMode(prefs.spacing)
         grid.snap = prefs.snap
         grid.ticks = prefs.ticks
         clock.visibility = if (prefs.clock) View.VISIBLE else View.GONE
@@ -201,6 +202,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
         val items = arrayOf(
             if (prefs.listView) "Show honeycomb" else "Show list",
             "Order: " + if (prefs.order == 0) "most used (tap for A to Z)" else "A to Z (tap for most used)",
+            "Icon spacing: " + listOf("compact", "normal", "roomy")[prefs.spacing] + " (tap to change)",
             "Snap to nearest icon: ${onOff(prefs.snap)}",
             "Haptic ticks: ${onOff(prefs.ticks)}",
             "Clock: ${onOff(prefs.clock)}",
@@ -214,12 +216,13 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
                 when (which) {
                     0 -> setListMode(!prefs.listView)
                     1 -> { prefs.order = 1 - prefs.order; reload() }
-                    2 -> { prefs.snap = !prefs.snap; applySettings() }
-                    3 -> { prefs.ticks = !prefs.ticks; applySettings() }
-                    4 -> { prefs.clock = !prefs.clock; applySettings() }
-                    5 -> { prefs.hideStatusBar = !prefs.hideStatusBar; applySettings() }
-                    6 -> requestHomeRole()
-                    7 -> grid.recentre()
+                    2 -> { prefs.spacing = (prefs.spacing + 1) % 3; applySettings() }
+                    3 -> { prefs.snap = !prefs.snap; applySettings() }
+                    4 -> { prefs.ticks = !prefs.ticks; applySettings() }
+                    5 -> { prefs.clock = !prefs.clock; applySettings() }
+                    6 -> { prefs.hideStatusBar = !prefs.hideStatusBar; applySettings() }
+                    7 -> requestHomeRole()
+                    8 -> grid.recentre()
                 }
             }.show()
     }

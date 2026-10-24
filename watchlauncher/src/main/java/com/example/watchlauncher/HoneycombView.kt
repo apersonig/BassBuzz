@@ -36,13 +36,18 @@ class HoneycombView(context: Context) : View(context) {
     var bottomInset = 0
 
     private val density = resources.displayMetrics.density
-    val spacingPx = 88f * density
-    val iconPx = 80f * density
+    /** Gap between icon centres: a share of the screen width, so it suits any screen size. */
+    var spacingPx = resources.displayMetrics.widthPixels / 4.2f
+        private set
+    val iconPx: Float get() = spacingPx * ICON_SHARE
+
+    private var spacingMode = 1
 
     private val lens = Lens(0.45f, 1.2f, 0.32f)
     private val scroller = Scroller2D()
 
     private var apps: List<AppEntry> = emptyList()
+    private var cells: List<IntArray> = emptyList()
     private var cellX = FloatArray(0)
     private var cellY = FloatArray(0)
 
@@ -53,6 +58,14 @@ class HoneycombView(context: Context) : View(context) {
     private var flung = false
     private var lastFrame = 0L
     private var animating = false
+
+    companion object {
+        const val ICON_SHARE = 0.80f // icon diameter as a share of the spacing: the rest is the gap
+        val SPACING_MULTIPLIER = floatArrayOf(0.88f, 1.0f, 1.25f)
+
+        /** Icon bitmap size that is big enough for the roomiest setting. */
+        fun maxIconPx(screenWidthPx: Int): Int = (screenWidthPx / 4.2f * SPACING_MULTIPLIER.max() * ICON_SHARE).toInt()
+    }
 
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val placeholder = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2C2C2E.toInt() }
@@ -71,17 +84,39 @@ class HoneycombView(context: Context) : View(context) {
 
     fun setApps(list: List<AppEntry>) {
         apps = list
-        val cells = Hex.spiral(list.size)
-        cellX = FloatArray(list.size) { Hex.x(cells[it][0], cells[it][1], spacingPx) }
-        cellY = FloatArray(list.size) { Hex.y(cells[it][1], spacingPx) }
-        if (list.isEmpty()) {
-            scroller.setBounds(0f, 0f, 0f, 0f)
-        } else {
-            scroller.setBounds(cellX.min(), cellX.max(), cellY.min(), cellY.max())
-        }
+        cells = Hex.spiral(list.size)
+        layoutCells()
         scroller.jumpTo(0f, 0f)
         focus = if (list.isEmpty()) -1 else 0
         invalidate()
+    }
+
+    /** 0 = compact, 1 = normal, 2 = roomy. */
+    fun setSpacingMode(mode: Int) {
+        spacingMode = mode.coerceIn(0, 2)
+        applySpacing()
+    }
+
+    private fun applySpacing() {
+        val w = if (width > 0) width else resources.displayMetrics.widthPixels
+        spacingPx = w / 4.2f * SPACING_MULTIPLIER[spacingMode]
+        // Keep the same icon in the middle while the spacing changes.
+        val oldX = scroller.x
+        val oldY = scroller.y
+        val before = spacingPxForLayout
+        layoutCells()
+        if (before > 0f) scroller.jumpTo(oldX * spacingPx / before, oldY * spacingPx / before)
+        invalidate()
+    }
+
+    private var spacingPxForLayout = 0f
+
+    private fun layoutCells() {
+        cellX = FloatArray(cells.size) { Hex.x(cells[it][0], cells[it][1], spacingPx) }
+        cellY = FloatArray(cells.size) { Hex.y(cells[it][1], spacingPx) }
+        spacingPxForLayout = spacingPx
+        if (cells.isEmpty()) scroller.setBounds(0f, 0f, 0f, 0f)
+        else scroller.setBounds(cellX.min(), cellX.max(), cellY.min(), cellY.max())
     }
 
     fun isCentred(): Boolean = abs(scroller.x) < 1f && abs(scroller.y) < 1f
@@ -94,6 +129,7 @@ class HoneycombView(context: Context) : View(context) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         rx = w * 0.55f
         ry = h * 0.42f
+        applySpacing()
     }
 
     /** Fills [tmp] with screen x, screen y, icon scale and lens distance for cell [i]. */

@@ -28,8 +28,7 @@ object IconRenderer {
         } else {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = LEGACY_BACKGROUND }
             c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
-            val inset = (size * 0.16f).toInt()
-            icon.setBounds(inset, inset, size - inset, size - inset)
+            icon.setBounds(0, 0, size, size) // square icons fill the circle; the mask below rounds them
             icon.draw(c)
         }
 
