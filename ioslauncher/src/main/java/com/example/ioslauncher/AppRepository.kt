@@ -115,6 +115,28 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
         prefs.countLaunch(app.key)
     }
 
+    /** The app's own shortcuts, like iOS quick actions. Android only hands these to the default home app. */
+    fun shortcuts(app: AppEntry): List<android.content.pm.ShortcutInfo> = try {
+        val q = LauncherApps.ShortcutQuery()
+            .setPackage(app.packageName)
+            .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC)
+        (launcherApps.getShortcuts(q, app.user) ?: emptyList())
+            .filter { it.isEnabled && (it.activity == null || it.activity == app.component) }
+            .take(4)
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    fun shortcutIcon(s: android.content.pm.ShortcutInfo): android.graphics.drawable.Drawable? = try {
+        launcherApps.getShortcutIconDrawable(s, context.resources.displayMetrics.densityDpi)
+    } catch (_: Exception) {
+        null
+    }
+
+    fun startShortcut(s: android.content.pm.ShortcutInfo) {
+        launcherApps.startShortcut(s, null, null)
+    }
+
     fun showAppInfo(app: AppEntry, bounds: Rect) {
         launcherApps.startAppDetailsActivity(app.component, app.user, bounds, null)
     }

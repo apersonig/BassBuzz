@@ -46,6 +46,8 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
     private lateinit var searchInput: EditText
     private lateinit var categoryTitle: TextView
     private lateinit var results: ListView
+    private lateinit var holdLayer: FrameLayout
+    private var holdOpen = false
 
     private var apps: List<AppEntry> = emptyList()
     private var shown: List<AppEntry> = emptyList()
@@ -173,10 +175,17 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
             isClickable = true
         }
 
+        holdLayer = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0x80000000.toInt())
+            setOnClickListener { closeHoldMenu() }
+        }
+
         root = FrameLayout(this).apply {
             addView(home, FrameLayout.LayoutParams(-1, -1))
             addView(editBar, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             addView(searchPanel, FrameLayout.LayoutParams(-1, -1))
+            addView(holdLayer, FrameLayout.LayoutParams(-1, -1))
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 val ime = insets.getInsets(WindowInsets.Type.ime())
@@ -224,6 +233,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             when {
+                holdOpen -> closeHoldMenu()
                 overlayOpen -> closeOverlay()
                 home.editing -> home.exitEdit()
                 else -> home.goToPage(0)
@@ -234,6 +244,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
     @Deprecated("Back is handled here so a launcher never closes itself")
     override fun onBackPressed() {
         when {
+            holdOpen -> closeHoldMenu()
             overlayOpen -> closeOverlay()
             home.editing -> home.exitEdit()
             else -> home.goToPage(0)
@@ -320,25 +331,142 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         }
     }
 
+    private class MenuRow(
+        val label: String,
+        val glyph: String? = null,
+        val icon: android.graphics.drawable.Drawable? = null,
+        val destructive: Boolean = false,
+        val action: () -> Unit,
+    )
+
+    /** The press-and-hold menu: the screen dims and blurs, the app lifts up, and a glass menu opens beside it. */
     override fun onAppMenu(app: AppEntry, bounds: Rect, inLibrary: Boolean) {
-        val labels = ArrayList<String>()
-        val actions = ArrayList<() -> Unit>()
+        val shortcuts = repo.shortcuts(app).map { s ->
+            MenuRow(s.shortLabel?.toString() ?: s.id, icon = repo.shortcutIcon(s)) { try { repo.startShortcut(s) } catch (_: Exception) {} }
+        }
+        val actions = ArrayList<MenuRow>()
         if (inLibrary && home.isHidden(app.key)) {
-            labels.add("Add to Home Screen")
-            actions.add { home.addToHome(app.key); closeOverlay() }
+            actions.add(MenuRow("Add to Home Screen", "+") { home.addToHome(app.key); closeOverlay() })
         }
-        labels.add("App info")
-        actions.add { try { repo.showAppInfo(app, bounds) } catch (_: Exception) {} }
-        labels.add("Delete App")
-        actions.add { startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}"))) }
-        if (!inLibrary) {
-            labels.add("Edit Home Screen")
-            actions.add { home.enterEdit() }
+        if (!inLibrary) actions.add(MenuRow("Edit Home Screen", "✎") { home.enterEdit() })
+        actions.add(MenuRow("App Info", "ⓘ") { try { repo.showAppInfo(app, bounds) } catch (_: Exception) {} })
+        actions.add(MenuRow("Delete App", "−", destructive = true) {
+            startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
+        })
+        showHoldMenu(app, bounds, shortcuts, actions)
+    }
+
+    private fun showHoldMenu(app: AppEntry, bounds: Rect, shortcuts: List<MenuRow>, actions: List<MenuRow>) {
+        val d = resources.displayMetrics.density
+        holdLayer.removeAllViews()
+        holdOpen = true
+
+        val rootLoc = IntArray(2)
+        root.getLocationOnScreen(rootLoc)
+        val ix = bounds.left - rootLoc[0]
+        val iy = bounds.top - rootLoc[1]
+
+        // The lifted icon, exactly over the one that was pressed.
+        val lifted = ImageView(this).apply {
+            setImageBitmap(app.icon)
+            scaleType = ImageView.ScaleType.FIT_XY
         }
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle(app.label)
-            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
-            .show()
+        holdLayer.addView(lifted, FrameLayout.LayoutParams(bounds.width(), bounds.height()).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = ix
+            topMargin = iy
+        })
+
+        // The menu card.
+        fun row(r: MenuRow): View = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = (50 * d).toInt()
+            setPadding((18 * d).toInt(), 0, (18 * d).toInt(), 0)
+            addView(TextView(context).apply {
+                text = r.label
+                textSize = 17f
+                maxLines = 1
+                setTextColor(if (r.destructive) 0xFFFF453A.toInt() else Color.WHITE)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            if (r.icon != null) {
+                addView(ImageView(context).apply { setImageDrawable(r.icon) }, LinearLayout.LayoutParams((26 * d).toInt(), (26 * d).toInt()))
+            } else if (r.glyph != null) {
+                addView(TextView(context).apply {
+                    text = r.glyph
+                    textSize = 20f
+                    setTextColor(if (r.destructive) 0xFFFF453A.toInt() else Color.WHITE)
+                })
+            }
+            setOnClickListener {
+                closeHoldMenu()
+                r.action()
+            }
+        }
+        fun line(thick: Boolean) = View(this).apply {
+            setBackgroundColor(if (thick) 0x55000000 else 0x33FFFFFF)
+        }.also { }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = 22 * d
+                setColor(0xE62C2C2E.toInt())
+                setStroke((1 * d).toInt().coerceAtLeast(1), 0x40FFFFFF)
+            }
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            elevation = 12 * d
+        }
+        shortcuts.forEachIndexed { i, r ->
+            if (i > 0) card.addView(line(false), LinearLayout.LayoutParams(-1, 1))
+            card.addView(row(r), LinearLayout.LayoutParams(-1, -2))
+        }
+        if (shortcuts.isNotEmpty()) card.addView(line(true), LinearLayout.LayoutParams(-1, (6 * d).toInt()))
+        actions.forEachIndexed { i, r ->
+            if (i > 0) card.addView(line(false), LinearLayout.LayoutParams(-1, 1))
+            card.addView(row(r), LinearLayout.LayoutParams(-1, -2))
+        }
+
+        val w = (250 * d).toInt()
+        card.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        val h = card.measuredHeight
+        val screenW = root.width
+        val screenH = root.height
+        val margin = (16 * d).toInt()
+        val gap = (14 * d).toInt() + (if (bounds.width() >= 40 * d) (14 * d).toInt() else 0) // room for the app's name under big icons
+        val x = (ix + bounds.width() / 2 - w / 2).coerceIn(margin, maxOf(margin, screenW - w - margin))
+        val below = iy + bounds.height() + gap + h <= screenH - bottomInset - margin
+        val y = if (below) iy + bounds.height() + gap else maxOf(topInset + margin, iy - gap - h)
+        holdLayer.addView(card, FrameLayout.LayoutParams(w, h).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = x
+            topMargin = y
+        })
+
+        holdLayer.visibility = View.VISIBLE
+        holdLayer.alpha = 0f
+        holdLayer.animate().alpha(1f).setDuration(180).start()
+        try { window.setBackgroundBlurRadius(70) } catch (_: Exception) {}
+        lifted.animate().scaleX(1.14f).scaleY(1.14f).setDuration(220).setInterpolator(android.view.animation.OvershootInterpolator(1.4f)).start()
+        card.alpha = 0f
+        card.scaleX = 0.7f
+        card.scaleY = 0.7f
+        card.pivotX = (ix + bounds.width() / 2 - x).toFloat()
+        card.pivotY = if (below) 0f else h.toFloat()
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(240).setInterpolator(android.view.animation.DecelerateInterpolator(1.6f)).start()
+    }
+
+    private fun closeHoldMenu() {
+        if (!holdOpen) return
+        holdOpen = false
+        try { window.setBackgroundBlurRadius(if (overlayOpen) 60 else 0) } catch (_: Exception) {}
+        holdLayer.animate().alpha(0f).setDuration(140).withEndAction {
+            if (!holdOpen) {
+                holdLayer.visibility = View.GONE
+                holdLayer.removeAllViews()
+            }
+        }.start()
     }
 
     override fun onBackgroundMenu() = showSettings()
