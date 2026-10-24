@@ -15,6 +15,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.MotionEvent
+import android.widget.EditText
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -34,6 +40,10 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     private lateinit var clock: TextClock
     private lateinit var root: FrameLayout
     private var apps: List<AppEntry> = emptyList()
+    private var shown: List<AppEntry> = emptyList()
+    private var searching = false
+    private lateinit var searchPanel: LinearLayout
+    private lateinit var searchInput: EditText
     private var topInset = 0
     private var bottomInset = 0
 
@@ -52,8 +62,63 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
             clipToPadding = false
             visibility = View.GONE
             overScrollMode = View.OVER_SCROLL_NEVER
-            setOnItemClickListener { _, v, pos, _ -> launch(apps[pos], boundsOf(v)) }
-            setOnItemLongClickListener { _, v, pos, _ -> onAppMenu(apps[pos], boundsOf(v)); true }
+            overScrollMode = View.OVER_SCROLL_ALWAYS
+            setOnItemClickListener { _, v, pos, _ -> launch(shown[pos], boundsOf(v)) }
+            setOnItemLongClickListener { _, v, pos, _ -> onAppMenu(shown[pos], boundsOf(v)); true }
+            // Pull down twice, as in iOS Settings: only a pull that starts with the list already at the top opens search.
+            var startedAtTop = false
+            var startY = 0f
+            var done = false
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { startedAtTop = !canScrollVertically(-1); startY = e.rawY; done = false }
+                    MotionEvent.ACTION_MOVE -> if (startedAtTop && !done && !searching && e.rawY - startY > 72 * d) {
+                        done = true
+                        openSearch()
+                    }
+                }
+                false
+            }
+        }
+        searchInput = EditText(this).apply {
+            hint = "Search apps"
+            setHintTextColor(0xFF8E8E93.toInt())
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = GradientDrawable().apply { cornerRadius = 24 * d; setColor(0xFF1C1C1E.toInt()) }
+            setPadding((14 * d).toInt(), 0, (14 * d).toInt(), 0)
+            compoundDrawablePadding = (8 * d).toInt()
+            val glass = resources.getDrawable(android.R.drawable.ic_menu_search, theme).mutate()
+            glass.setTint(0xFF8E8E93.toInt())
+            setCompoundDrawablesRelativeWithIntrinsicBounds(glass, null, null, null)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) = applyFilter()
+            })
+            setOnEditorActionListener { _, action, _ ->
+                if (action == EditorInfo.IME_ACTION_SEARCH) {
+                    shown.firstOrNull()?.let { launch(it, Rect(0, 0, 1, 1)) }
+                    true
+                } else false
+            }
+        }
+        searchPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.BLACK)
+            setPadding((12 * d).toInt(), (4 * d).toInt(), (12 * d).toInt(), (8 * d).toInt())
+            visibility = View.GONE
+            addView(searchInput, LinearLayout.LayoutParams(0, (46 * d).toInt(), 1f))
+            addView(TextView(context).apply {
+                text = "Cancel"
+                textSize = 17f
+                setTextColor(0xFF0A84FF.toInt())
+                setPadding((14 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
+                setOnClickListener { closeSearch() }
+            })
         }
         clock = TextClock(this).apply {
             format12Hour = "h:mm"
@@ -66,14 +131,17 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
             setBackgroundColor(Color.BLACK)
             addView(grid, FrameLayout.LayoutParams(-1, -1))
             addView(list, FrameLayout.LayoutParams(-1, -1))
+            addView(searchPanel, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             addView(clock, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { rightMargin = (20 * d).toInt() })
             setOnApplyWindowInsetsListener { _, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
                 topInset = bars.top
                 bottomInset = bars.bottom
                 (clock.layoutParams as FrameLayout.LayoutParams).topMargin = topInset + (8 * d).toInt()
                 clock.requestLayout()
-                list.setPadding((12 * d).toInt(), topInset + (44 * d).toInt(), (12 * d).toInt(), bottomInset + (12 * d).toInt())
+                (searchPanel.layoutParams as FrameLayout.LayoutParams).topMargin = topInset
+                searchPanel.requestLayout()
+                updateListPadding()
                 grid.bottomInset = bottomInset
                 insets
             }
@@ -81,8 +149,8 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
         setContentView(root)
 
         list.adapter = object : BaseAdapter() {
-            override fun getCount() = apps.size
-            override fun getItem(position: Int) = apps[position]
+            override fun getCount() = shown.size
+            override fun getItem(position: Int) = shown[position]
             override fun getItemId(position: Int) = position.toLong()
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val row = (convertView as? LinearLayout) ?: LinearLayout(this@LauncherActivity).apply {
@@ -95,7 +163,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
                     addView(TextView(context).apply { setTextColor(Color.WHITE); textSize = 18f; maxLines = 1 },
                         LinearLayout.LayoutParams(-1, -2).apply { leftMargin = (14 * d).toInt() })
                 }
-                val app = apps[position]
+                val app = shown[position]
                 (row.getChildAt(0) as ImageView).setImageBitmap(app.full)
                 (row.getChildAt(1) as TextView).text = app.label
                 return row
@@ -111,6 +179,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
         repo.load(px, onList = {
             apps = it
             grid.setApps(it)
+            applyFilter()
             (list.adapter as BaseAdapter).notifyDataSetChanged()
         }, onProgress = {
             grid.invalidate()
@@ -134,29 +203,79 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     }
 
     private fun goHome() {
-        if (list.visibility == View.VISIBLE) setListMode(false)
+        if (searching) closeSearch()
+        else if (list.visibility == View.VISIBLE) setListMode(false)
         else if (!grid.isCentred()) grid.recentre()
     }
 
     @Deprecated("Back is handled here so a launcher never closes itself")
     override fun onBackPressed() {
-        if (prefs.listView) setListMode(false) else if (!grid.isCentred()) grid.recentre()
+        if (searching) closeSearch() else if (prefs.listView) setListMode(false) else if (!grid.isCentred()) grid.recentre()
     }
 
     private fun setListMode(on: Boolean) {
         prefs.listView = on
-        list.visibility = if (on) View.VISIBLE else View.GONE
-        grid.visibility = if (on) View.GONE else View.VISIBLE
+        updateVisibility()
         if (on) list.setSelection(0)
+    }
+
+    private fun updateVisibility() {
+        val showList = prefs.listView || searching
+        list.visibility = if (showList) View.VISIBLE else View.GONE
+        grid.visibility = if (showList) View.GONE else View.VISIBLE
+        clock.visibility = if (prefs.clock && !searching) View.VISIBLE else View.GONE
+        updateListPadding()
+    }
+
+    private fun updateListPadding() {
+        val d = resources.displayMetrics.density
+        val top = topInset + ((if (searching) 62 else 44) * d).toInt()
+        list.setPadding((12 * d).toInt(), top, (12 * d).toInt(), bottomInset + (12 * d).toInt())
+    }
+
+    // ---- search ----
+
+    override fun onPullToSearch() = openSearch()
+
+    private fun openSearch() {
+        if (searching) return
+        searching = true
+        searchInput.setText("")
+        updateVisibility()
+        applyFilter()
+        searchPanel.visibility = View.VISIBLE
+        searchPanel.alpha = 0f
+        searchPanel.translationY = -60 * resources.displayMetrics.density
+        searchPanel.animate().alpha(1f).translationY(0f).setDuration(220).start()
+        searchInput.requestFocus()
+        searchInput.post { getSystemService(InputMethodManager::class.java).showSoftInput(searchInput, 0) }
+    }
+
+    private fun closeSearch() {
+        if (!searching) return
+        searching = false
+        getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(searchInput.windowToken, 0)
+        searchInput.clearFocus()
+        searchPanel.animate().alpha(0f).translationY(-60 * resources.displayMetrics.density).setDuration(180)
+            .withEndAction { if (!searching) searchPanel.visibility = View.GONE }.start()
+        updateVisibility()
+        applyFilter()
+    }
+
+    private fun applyFilter() {
+        val q = if (searching) searchInput.text.toString().trim().lowercase() else ""
+        shown = if (q.isEmpty()) apps else {
+            val (starts, contains) = apps.filter { it.label.lowercase().contains(q) }.partition { it.label.lowercase().startsWith(q) }
+            starts + contains
+        }
+        (list.adapter as BaseAdapter).notifyDataSetChanged()
     }
 
     private fun applySettings() {
         grid.setSpacingMode(prefs.spacing)
         grid.snap = prefs.snap
         grid.ticks = prefs.ticks
-        clock.visibility = if (prefs.clock) View.VISIBLE else View.GONE
-        list.visibility = if (prefs.listView) View.VISIBLE else View.GONE
-        grid.visibility = if (prefs.listView) View.GONE else View.VISIBLE
+        updateVisibility()
         window.insetsController?.let {
             if (prefs.hideStatusBar) {
                 it.hide(WindowInsets.Type.statusBars())
@@ -209,6 +328,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
             "Hide status bar: ${onOff(prefs.hideStatusBar)}",
             "Make this my home app",
             "Centre the grid",
+            "Search apps",
         )
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle("Watch Launcher")
@@ -223,6 +343,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
                     6 -> { prefs.hideStatusBar = !prefs.hideStatusBar; applySettings() }
                     7 -> requestHomeRole()
                     8 -> grid.recentre()
+                    9 -> openSearch()
                 }
             }.show()
     }

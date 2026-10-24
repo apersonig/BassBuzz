@@ -22,6 +22,9 @@ class HoneycombView(context: Context) : View(context) {
         fun onLaunch(app: AppEntry, bounds: Rect)
         fun onAppMenu(app: AppEntry, bounds: Rect)
         fun onBackgroundMenu()
+
+        /** The grid was pulled down while already resting at its very top. */
+        fun onPullToSearch()
     }
 
     var listener: Listener? = null
@@ -42,6 +45,10 @@ class HoneycombView(context: Context) : View(context) {
     val iconPx: Float get() = spacingPx * ICON_SHARE
 
     private var spacingMode = 1
+    private var topY = 0f
+    private var startedAtTop = false
+    private var pullStartY = 0f
+    private var pullDone = false
 
     private val lens = Lens(0.45f, 1.2f, 0.32f)
     private val scroller = Scroller2D()
@@ -115,6 +122,7 @@ class HoneycombView(context: Context) : View(context) {
         cellX = FloatArray(cells.size) { Hex.x(cells[it][0], cells[it][1], spacingPx) }
         cellY = FloatArray(cells.size) { Hex.y(cells[it][1], spacingPx) }
         spacingPxForLayout = spacingPx
+        topY = if (cells.isEmpty()) 0f else cellY.min()
         if (cells.isEmpty()) scroller.setBounds(0f, 0f, 0f, 0f)
         else scroller.setBounds(cellX.min(), cellX.max(), cellY.min(), cellY.max())
     }
@@ -274,7 +282,19 @@ class HoneycombView(context: Context) : View(context) {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> touching = true
+            MotionEvent.ACTION_DOWN -> {
+                touching = true
+                scroller.stop()
+                // Like the pull-down search on iOS: only a pull that starts with the grid already at the top counts,
+                // so the pull that gets you there just bounces and a second pull opens search.
+                startedAtTop = apps.isNotEmpty() && scroller.y <= topY + 1f
+                pullStartY = e.y
+                pullDone = false
+            }
+            MotionEvent.ACTION_MOVE -> if (startedAtTop && !pullDone && e.y - pullStartY > 72f * density) {
+                pullDone = true
+                listener?.onPullToSearch()
+            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touching = false
         }
         val handled = gestures.onTouchEvent(e)
