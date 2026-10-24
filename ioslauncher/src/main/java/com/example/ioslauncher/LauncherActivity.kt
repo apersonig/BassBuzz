@@ -41,7 +41,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
     private lateinit var undoButton: TextView
     private lateinit var redoButton: TextView
 
-    private lateinit var overlay: LinearLayout
+    private lateinit var searchPanel: LinearLayout
     private lateinit var searchRow: LinearLayout
     private lateinit var searchInput: EditText
     private lateinit var categoryTitle: TextView
@@ -93,7 +93,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
             addView(pill("Done") { home.exitEdit() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = (8 * d).toInt() })
         }
 
-        // ---- search / category overlay ----
+        // ---- search / category searchPanel ----
         searchInput = EditText(this).apply {
             hint = "Search"
             setHintTextColor(0xFFAEAEB2.toInt())
@@ -164,7 +164,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
                 }
             }
         }
-        overlay = LinearLayout(this).apply {
+        searchPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
             setBackgroundColor(0xAA000000.toInt())
@@ -176,7 +176,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         root = FrameLayout(this).apply {
             addView(home, FrameLayout.LayoutParams(-1, -1))
             addView(editBar, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
-            addView(overlay, FrameLayout.LayoutParams(-1, -1))
+            addView(searchPanel, FrameLayout.LayoutParams(-1, -1))
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 val ime = insets.getInsets(WindowInsets.Type.ime())
@@ -185,7 +185,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
                 home.setInsets(bars.top, bars.bottom)
                 (editBar.layoutParams as FrameLayout.LayoutParams).topMargin = topInset
                 editBar.requestLayout()
-                overlay.setPadding(0, topInset, 0, maxOf(bars.bottom, ime.bottom))
+                searchPanel.setPadding(0, topInset, 0, maxOf(bars.bottom, ime.bottom))
                 insets
             }
         }
@@ -273,9 +273,9 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         categoryTitle.visibility = if (isCategory) View.VISIBLE else View.GONE
         categoryTitle.text = category ?: ""
         applyFilter()
-        overlay.visibility = View.VISIBLE
-        overlay.alpha = 0f
-        overlay.animate().alpha(1f).setDuration(200).start()
+        searchPanel.visibility = View.VISIBLE
+        searchPanel.alpha = 0f
+        searchPanel.animate().alpha(1f).setDuration(200).start()
         try { window.setBackgroundBlurRadius(60) } catch (_: Exception) {}
         results.setSelection(0)
         if (!isCategory) {
@@ -290,7 +290,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(searchInput.windowToken, 0)
         searchInput.clearFocus()
         try { window.setBackgroundBlurRadius(0) } catch (_: Exception) {}
-        overlay.animate().alpha(0f).setDuration(160).withEndAction { if (!overlayOpen) overlay.visibility = View.GONE }.start()
+        searchPanel.animate().alpha(0f).setDuration(160).withEndAction { if (!overlayOpen) searchPanel.visibility = View.GONE }.start()
     }
 
     private fun applyFilter() {
