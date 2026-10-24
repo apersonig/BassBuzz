@@ -95,3 +95,11 @@ manager). Player settings (intensity, gate, punch, timing, background-proof mode
 Background playback uses a foreground media service, so Android keeps it alive with the screen off or the
 app closed, and the notification has Pause/Play and Stop. If music continues but the motor stops once the
 screen is off, turn on **Background-proof mode**, which sends the vibration on the alarm channel.
+
+## Watch Launcher
+
+A home-screen launcher styled after the Apple Watch app grid: round icons packed in a honeycomb, large in the
+middle and shrinking smoothly towards the edges. Drag or fling to roam, and the nearest icon settles into the
+middle. Tap to open, long-press an icon for App info / Uninstall / Move to centre, long-press empty space for
+settings (list view, order, snap, haptic ticks, clock, status bar). Set it as your home app from that menu or in
+Settings > Apps > Default apps > Home app. The layout is built once per load, so it doesn't reshuffle while you use it.
