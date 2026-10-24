@@ -16,7 +16,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - name: Unit tests and build
-        run: ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest :ultrasonic:testDebugUnitTest :watchlauncher:testDebugUnitTest assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest :ultrasonic:testDebugUnitTest :watchlauncher:testDebugUnitTest assembleDebug --no-daemon 2>&1 | tee build.log
+      - name: Surface errors
+        if: failure()
+        run: |
+          grep -E "^e: |error:|FAILED|What went wrong|AAPT|Execution failed|Test .* FAILED|Exception" build.log | head -25 | while IFS= read -r line; do echo "::error::${line:0:400}"; done
       - uses: actions/upload-artifact@v4
         with:
           name: BassBuzz-debug-apk
