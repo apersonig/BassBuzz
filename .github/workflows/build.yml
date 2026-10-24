@@ -18,7 +18,7 @@ jobs:
       - name: Unit tests and build
         run: |
           set -o pipefail
-          ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest :ultrasonic:testDebugUnitTest :watchlauncher:testDebugUnitTest assembleDebug --no-daemon 2>&1 | tee build.log
+          ./gradlew :core:testDebugUnitTest :ldaf:testDebugUnitTest :ultrasonic:testDebugUnitTest :watchlauncher:testDebugUnitTest :ioslauncher:testDebugUnitTest assembleDebug --no-daemon 2>&1 | tee build.log
       - name: Surface errors
         if: failure()
         run: |
@@ -43,6 +43,10 @@ jobs:
         with:
           name: Watch-Launcher-debug-apk
           path: watchlauncher/build/outputs/apk/debug/watchlauncher-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glass-Launcher-debug-apk
+          path: ioslauncher/build/outputs/apk/debug/ioslauncher-debug.apk
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
