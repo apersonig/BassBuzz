@@ -104,11 +104,11 @@ middle. Tap to open, long-press an icon for App info / Uninstall / Move to centr
 settings (list view, order, snap, haptic ticks, clock, status bar). Set it as your home app from that menu or in
 Settings > Apps > Default apps > Home app. The layout is built once per load, so it doesn't reshuffle while you use it.
 
-## Glass Launcher
+## Pages
 
-An iOS 27-style home screen: paged 4-column icon grid with glass-finished squircle icons, a frosted dock, page dots and
-a Search pill, the wallpaper showing through, and an App Library as the last page (grouped by category). Swipe down
-anywhere to search. Long-press an icon for App info / Delete / Edit Home Screen; long-press empty space (or choose Edit)
-to wiggle the icons: drag to rearrange (also into the dock, or hold at a screen edge to change page), tap the minus to
-move an app to the App Library only, and use Undo / Redo at the top. "Customize" has the glass transparency slider.
-Widgets and folders are not included.
+A paged home screen in the iPhone's layout: a four-column icon grid on your wallpaper, a dock, page dots and a Search
+pill, and an App Library as the last page (grouped by category). The surfaces are flat and matte, with no blur or
+gloss. Swipe down anywhere to search. Press and hold an icon for its shortcuts, App Info and Delete; hold empty space
+(or choose Edit Home Screen) to wiggle the icons, drag to rearrange them (also into the dock, or hold at a screen edge
+to change page), tap the minus to leave an app in the App Library only, and use Undo and Redo at the top.
+"Customize" has the panel opacity slider. Widgets and folders are not included.

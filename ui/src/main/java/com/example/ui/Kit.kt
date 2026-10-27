@@ -362,6 +362,31 @@ class Kit(val ctx: Context, val theme: Theme) {
         return d
     }
 
+    /** Same card, but holding any view (a slider, say) instead of a sentence. */
+    fun dialog(title: String, content: View, confirm: String, onConfirm: () -> Unit = {}): Dialog {
+        val d = baseDialog()
+        val card = column().apply {
+            background = shape(c.surface, dp(14).toFloat())
+            setPadding(dp(24), dp(24), dp(24), dp(12))
+        }
+        card.addView(heading(title))
+        gap(card, 16)
+        card.addView(content, LinearLayout.LayoutParams(-1, -2))
+        gap(card, 16)
+        val actions = LinearLayout(ctx).apply { gravity = Gravity.END }
+        actions.addView(button(confirm, Weight.QUIET) {
+            d.dismiss()
+            onConfirm()
+        })
+        card.addView(actions, LinearLayout.LayoutParams(-1, -2))
+        d.setContentView(card)
+        d.setOnShowListener {
+            val w = ctx.resources.displayMetrics.widthPixels
+            d.window?.setLayout(minOf(dp(380), (w * 0.9f).toInt()), ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        return d
+    }
+
     /** A list of choices that slides up from the bottom, used by the launchers. */
     fun sheet(title: String?, items: List<SheetItem>): Dialog {
         val d = baseDialog()

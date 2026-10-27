@@ -30,10 +30,16 @@ import android.widget.TextClock
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.SheetItem
+import com.example.ui.Theme
 
 class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
 
     private lateinit var prefs: Prefs
+    private lateinit var kit: Kit
     private lateinit var repo: AppRepository
     private lateinit var grid: HoneycombView
     private lateinit var list: ListView
@@ -52,6 +58,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        kit = Kit(this, Theme(Palettes.night, Fonts.system()))
         repo = AppRepository(this, prefs)
         val d = resources.displayMetrics.density
 
@@ -82,16 +89,16 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
         }
         searchInput = EditText(this).apply {
             hint = "Search apps"
-            setHintTextColor(0xFF8E8E93.toInt())
+            setHintTextColor(kit.c.inkSoft)
             setTextColor(Color.WHITE)
             textSize = 17f
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_SEARCH
-            background = GradientDrawable().apply { cornerRadius = 24 * d; setColor(0xFF1C1C1E.toInt()) }
+            background = GradientDrawable().apply { cornerRadius = 24 * d; setColor(kit.c.surface) }
             setPadding((14 * d).toInt(), 0, (14 * d).toInt(), 0)
             compoundDrawablePadding = (8 * d).toInt()
             val glass = resources.getDrawable(android.R.drawable.ic_menu_search, theme).mutate()
-            glass.setTint(0xFF8E8E93.toInt())
+            glass.setTint(kit.c.inkSoft)
             setCompoundDrawablesRelativeWithIntrinsicBounds(glass, null, null, null)
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
@@ -115,7 +122,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
             addView(TextView(context).apply {
                 text = "Cancel"
                 textSize = 17f
-                setTextColor(0xFF0A84FF.toInt())
+                setTextColor(kit.c.accent)
                 setPadding((14 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
                 setOnClickListener { closeSearch() }
             })
@@ -157,7 +164,7 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding((10 * d).toInt(), (8 * d).toInt(), (20 * d).toInt(), (8 * d).toInt())
-                    background = GradientDrawable().apply { cornerRadius = 40 * d; setColor(0xFF1C1C1E.toInt()) }
+                    background = GradientDrawable().apply { cornerRadius = 40 * d; setColor(kit.c.surface) }
                     layoutParams = android.widget.AbsListView.LayoutParams(-1, -2)
                     addView(ImageView(context), LinearLayout.LayoutParams((52 * d).toInt(), (52 * d).toInt()))
                     addView(TextView(context).apply { setTextColor(Color.WHITE); textSize = 18f; maxLines = 1 },
@@ -304,48 +311,32 @@ class LauncherActivity : ComponentActivity(), HoneycombView.Listener {
     override fun onLaunch(app: AppEntry, bounds: Rect) = launch(app, bounds)
 
     override fun onAppMenu(app: AppEntry, bounds: Rect) {
-        val items = arrayOf("App info", "Uninstall", "Move to centre")
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle(app.label)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> try { repo.showAppInfo(app, bounds) } catch (_: Exception) {}
-                    1 -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
-                    2 -> { prefs.promote(app.key); reload() }
-                }
-            }.show()
+        kit.sheet(app.label, listOf(
+            SheetItem("App info") { try { repo.showAppInfo(app, bounds) } catch (_: Exception) {} },
+            SheetItem("Move to centre") { prefs.promote(app.key); reload() },
+            SheetItem("Uninstall", destructive = true) {
+                startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
+            },
+        )).show()
     }
 
     override fun onBackgroundMenu() {
-        val onOff = { b: Boolean -> if (b) "on" else "off" }
-        val items = arrayOf(
-            if (prefs.listView) "Show honeycomb" else "Show list",
-            "Order: " + if (prefs.order == 0) "most used (tap for A to Z)" else "A to Z (tap for most used)",
-            "Icon spacing: " + listOf("compact", "normal", "roomy")[prefs.spacing] + " (tap to change)",
-            "Snap to nearest icon: ${onOff(prefs.snap)}",
-            "Haptic ticks: ${onOff(prefs.ticks)}",
-            "Clock: ${onOff(prefs.clock)}",
-            "Hide status bar: ${onOff(prefs.hideStatusBar)}",
-            "Make this my home app",
-            "Centre the grid",
-            "Search apps",
-        )
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Watch Launcher")
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> setListMode(!prefs.listView)
-                    1 -> { prefs.order = 1 - prefs.order; reload() }
-                    2 -> { prefs.spacing = (prefs.spacing + 1) % 3; applySettings() }
-                    3 -> { prefs.snap = !prefs.snap; applySettings() }
-                    4 -> { prefs.ticks = !prefs.ticks; applySettings() }
-                    5 -> { prefs.clock = !prefs.clock; applySettings() }
-                    6 -> { prefs.hideStatusBar = !prefs.hideStatusBar; applySettings() }
-                    7 -> requestHomeRole()
-                    8 -> grid.recentre()
-                    9 -> openSearch()
-                }
-            }.show()
+        val onOff = { b: Boolean -> if (b) "On" else "Off" }
+        kit.sheet("Watch Launcher", listOf(
+            SheetItem("View", if (prefs.listView) "List" else "Honeycomb") { setListMode(!prefs.listView) },
+            SheetItem("Order", if (prefs.order == 0) "Most used" else "A to Z") { prefs.order = 1 - prefs.order; reload() },
+            SheetItem("Icon spacing", listOf("Compact", "Normal", "Roomy")[prefs.spacing]) {
+                prefs.spacing = (prefs.spacing + 1) % 3
+                applySettings()
+            },
+            SheetItem("Snap to nearest icon", onOff(prefs.snap)) { prefs.snap = !prefs.snap; applySettings() },
+            SheetItem("Haptic ticks", onOff(prefs.ticks)) { prefs.ticks = !prefs.ticks; applySettings() },
+            SheetItem("Clock", onOff(prefs.clock)) { prefs.clock = !prefs.clock; applySettings() },
+            SheetItem("Hide status bar", onOff(prefs.hideStatusBar)) { prefs.hideStatusBar = !prefs.hideStatusBar; applySettings() },
+            SheetItem("Search apps") { openSearch() },
+            SheetItem("Centre the grid") { grid.recentre() },
+            SheetItem("Make this my home app") { requestHomeRole() },
+        )).show()
     }
 
     private fun requestHomeRole() {

@@ -17,7 +17,7 @@ import kotlin.math.pow
 import kotlin.math.sign
 import kotlin.math.sin
 
-/** Turns any app icon into an iOS-shaped one: continuous-corner square with a glass finish. */
+/** Turns any app icon into a continuous-corner square, flat, with nothing added on top. */
 object SquircleIcon {
 
     /** A superellipse, which is what gives iOS icons their smooth "continuous" corners. */
@@ -56,18 +56,7 @@ object SquircleIcon {
             icon.draw(c)
         }
 
-        // Glass finish: a faint sheen from the top, and bright edges that are sharper at the top and bottom.
-        val sheen = Paint().apply {
-            shader = LinearGradient(0f, 0f, 0f, s, intArrayOf(0x26FFFFFF, 0x00FFFFFF, 0x1A000000), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-        }
-        c.drawRect(0f, 0f, s, s, sheen)
         val shape = shape(s)
-        val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = s * 0.03f
-            shader = LinearGradient(0f, 0f, 0f, s, intArrayOf(0xB0FFFFFF.toInt(), 0x00FFFFFF, 0x66FFFFFF), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-        }
-        c.drawPath(shape, edge)
 
         // Erase everything outside the shape, with a smooth edge.
         val outside = Path().apply {

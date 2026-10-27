@@ -10,10 +10,10 @@ class Prefs(context: Context) {
         get() = sp.getString("layout", null)
         set(v) = sp.edit().putString("layout", v).apply()
 
-    /** 0 = clear glass, 100 = frosted: the iOS 27 transparency slider. */
-    var glass: Int
-        get() = sp.getInt("glass", 55)
-        set(v) = sp.edit().putInt("glass", v).apply()
+    /** How solid the dock, search pill and library cards are, 0 to 100. */
+    var opacity: Int
+        get() = sp.getInt("opacity", 70)
+        set(v) = sp.edit().putInt("opacity", v).apply()
 
     fun launches(key: String): Int = usage.getInt(key, 0)
     fun countLaunch(key: String) = usage.edit().putInt(key, launches(key) + 1).apply()

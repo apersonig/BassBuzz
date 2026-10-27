@@ -30,10 +30,16 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.SheetItem
+import com.example.ui.Theme
 
 class LauncherActivity : ComponentActivity(), HomeView.Listener {
 
     private lateinit var prefs: Prefs
+    private lateinit var kit: Kit
     private lateinit var repo: AppRepository
     private lateinit var home: HomeView
     private lateinit var root: FrameLayout
@@ -61,13 +67,14 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        kit = Kit(this, Theme(Palettes.night, Fonts.system()))
         repo = AppRepository(this, prefs)
         val d = resources.displayMetrics.density
 
         home = HomeView(this).also {
             it.listener = this
             it.launchCount = { key -> prefs.launches(key) }
-            it.setGlass(prefs.glass / 100f)
+            it.setPanelOpacity(prefs.opacity / 100f)
         }
 
         // ---- edit bar: Undo / Redo (new in iOS 27), Customize, Done ----
@@ -77,7 +84,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding((16 * d).toInt(), (8 * d).toInt(), (16 * d).toInt(), (8 * d).toInt())
-            background = GradientDrawable().apply { cornerRadius = 40 * d; setColor(0x55FFFFFF) }
+            background = GradientDrawable().apply { cornerRadius = 40 * d; setColor(kit.c.surface) }
             setOnClickListener { onClick() }
         }
         undoButton = pill("↶ Undo") { home.undo(); refreshEditBar() }
@@ -98,12 +105,12 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         // ---- search / category searchPanel ----
         searchInput = EditText(this).apply {
             hint = "Search"
-            setHintTextColor(0xFFAEAEB2.toInt())
+            setHintTextColor(kit.c.inkSoft)
             setTextColor(Color.WHITE)
             textSize = 17f
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_SEARCH
-            background = GradientDrawable().apply { cornerRadius = 24 * d; setColor(0x44FFFFFF) }
+            background = GradientDrawable().apply { cornerRadius = 24 * d; setColor(kit.c.surface) }
             setPadding((16 * d).toInt(), 0, (16 * d).toInt(), 0)
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
@@ -169,7 +176,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         searchPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
-            setBackgroundColor(0xAA000000.toInt())
+            setBackgroundColor(0xEB000000.toInt())
             addView(searchRow)
             addView(results, LinearLayout.LayoutParams(-1, 0, 1f))
             isClickable = true
@@ -177,7 +184,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
 
         holdLayer = FrameLayout(this).apply {
             visibility = View.GONE
-            setBackgroundColor(0x80000000.toInt())
+            setBackgroundColor(0xB3000000.toInt())
             setOnClickListener { closeHoldMenu() }
         }
 
@@ -287,7 +294,6 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         searchPanel.visibility = View.VISIBLE
         searchPanel.alpha = 0f
         searchPanel.animate().alpha(1f).setDuration(200).start()
-        try { window.setBackgroundBlurRadius(60) } catch (_: Exception) {}
         results.setSelection(0)
         if (!isCategory) {
             searchInput.requestFocus()
@@ -300,7 +306,6 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         overlayOpen = false
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(searchInput.windowToken, 0)
         searchInput.clearFocus()
-        try { window.setBackgroundBlurRadius(0) } catch (_: Exception) {}
         searchPanel.animate().alpha(0f).setDuration(160).withEndAction { if (!overlayOpen) searchPanel.visibility = View.GONE }.start()
     }
 
@@ -339,7 +344,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         val action: () -> Unit,
     )
 
-    /** The press-and-hold menu: the screen dims and blurs, the app lifts up, and a glass menu opens beside it. */
+    /** The press-and-hold menu: the screen dims, the app lifts up, and a menu opens beside it. */
     override fun onAppMenu(app: AppEntry, bounds: Rect, inLibrary: Boolean) {
         val shortcuts = repo.shortcuts(app).map { s ->
             MenuRow(s.shortLabel?.toString() ?: s.id, icon = repo.shortcutIcon(s)) { try { repo.startShortcut(s) } catch (_: Exception) {} }
@@ -411,8 +416,7 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = 22 * d
-                setColor(0xE62C2C2E.toInt())
-                setStroke((1 * d).toInt().coerceAtLeast(1), 0x40FFFFFF)
+                setColor(0xFF2C2C2E.toInt())
             }
             clipToOutline = true
             outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -447,7 +451,6 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         holdLayer.visibility = View.VISIBLE
         holdLayer.alpha = 0f
         holdLayer.animate().alpha(1f).setDuration(180).start()
-        try { window.setBackgroundBlurRadius(70) } catch (_: Exception) {}
         lifted.animate().scaleX(1.14f).scaleY(1.14f).setDuration(220).setInterpolator(android.view.animation.OvershootInterpolator(1.4f)).start()
         card.alpha = 0f
         card.scaleX = 0.7f
@@ -472,43 +475,23 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
     override fun onBackgroundMenu() = showSettings()
 
     private fun showSettings() {
-        val items = arrayOf("Glass transparency…", "Make this my home app", "Reset home screen layout")
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Glass Launcher")
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> showGlassSlider()
-                    1 -> requestHomeRole()
-                    2 -> home.resetLayout()
-                }
-            }.show()
+        kit.sheet("Home screen", listOf(
+            SheetItem("Panel opacity", "${prefs.opacity}%") { showOpacitySlider() },
+            SheetItem("Make this my home app") { requestHomeRole() },
+            SheetItem("Reset home screen layout", destructive = true) { home.resetLayout() },
+        )).show()
     }
 
-    private fun showGlassSlider() {
-        val d = resources.displayMetrics.density
-        val bar = SeekBar(this).apply {
-            max = 100
-            progress = prefs.glass
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
-                    prefs.glass = p
-                    home.setGlass(p / 100f)
-                }
-                override fun onStartTrackingTouch(s: SeekBar) {}
-                override fun onStopTrackingTouch(s: SeekBar) {}
-            })
-        }
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((24 * d).toInt(), (16 * d).toInt(), (24 * d).toInt(), (8 * d).toInt())
-            addView(TextView(context).apply { text = "Clear  ←→  Frosted"; setTextColor(0xFFAEAEB2.toInt()) })
-            addView(bar)
-        }
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Glass transparency")
-            .setView(box)
-            .setPositiveButton("Done", null)
-            .show()
+    private fun showOpacitySlider() {
+        val slider = kit.slider(
+            "Opacity", 0f, 100f, prefs.opacity.toFloat(), { "${it.toInt()}%" },
+            "How solid the dock, search pill and library cards are.",
+            { p ->
+                prefs.opacity = p.toInt()
+                home.setPanelOpacity(p / 100f)
+            },
+        )
+        kit.dialog("Panel opacity", slider.view, "Done").show()
     }
 
     private fun requestHomeRole() {

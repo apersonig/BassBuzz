@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * The whole iOS-style home screen, drawn on one canvas: pages of icons, the dock, the search pill and page dots,
+ * The whole paged home screen, drawn on one canvas: pages of icons, the dock, the search pill and page dots,
  * the App Library as the last page, and the edit mode with wiggling icons and drag to rearrange.
  */
 class HomeView(context: Context) : View(context) {
@@ -66,10 +66,10 @@ class HomeView(context: Context) : View(context) {
     var launchCount: (String) -> Int = { 0 }
 
     private val d = resources.displayMetrics.density
-    private val glass = Glass(d)
+    private val panel = Panel()
 
-    fun setGlass(level: Float) {
-        glass.level = level
+    fun setPanelOpacity(level: Float) {
+        panel.level = level
         invalidate()
     }
 
@@ -413,7 +413,7 @@ class HomeView(context: Context) : View(context) {
 
     private fun drawDock(c: Canvas, l: HomeLayout, fade: Float) {
         tmp.set(dockMargin, dockTop, width - dockMargin, dockTop + dockH)
-        glass.draw(c, tmp, 30f * d, fade)
+        panel.draw(c, tmp, 30f * d, fade)
         for ((i, k) in l.dock.withIndex()) {
             if (k == dragKey) continue
             val app = byKey[k] ?: continue
@@ -433,7 +433,7 @@ class HomeView(context: Context) : View(context) {
             }
         }
         if (!editing) {
-            glass.draw(c, pillRect, 17f * d, fade)
+            panel.draw(c, pillRect, 17f * d, fade)
             strokePaint.alpha = (fade * 217).toInt()
             val gx = pillRect.left + 34f * d
             c.drawCircle(gx, pillCy - 1.5f * d, 5f * d, strokePaint)
@@ -451,7 +451,7 @@ class HomeView(context: Context) : View(context) {
     private fun drawLibrary(c: Canvas, n: Int) {
         val x0 = (n - pagePos) * width
         val pill = RectF(x0 + 16f * d, topInset + 14f * d, x0 + width - 16f * d, topInset + 58f * d)
-        glass.draw(c, pill, 22f * d)
+        panel.draw(c, pill, 22f * d)
         val gx = pill.left + 24f * d
         strokePaint.alpha = 217
         c.drawCircle(gx, pill.centerY() - 1.5f * d, 5.5f * d, strokePaint)
@@ -468,7 +468,7 @@ class HomeView(context: Context) : View(context) {
             cardOrigin(i, x0, o)
             if (o[1] + cardW + 38f * d < pill.bottom || o[1] > height) continue
             tmp.set(o[0], o[1], o[0] + cardW, o[1] + cardW)
-            glass.draw(c, tmp, 26f * d)
+            panel.draw(c, tmp, 26f * d)
             for ((j, app) in card.apps.take(4).withIndex()) {
                 drawApp(c, app, o[0] + pad + (j % 2) * (mini + pad) + mini / 2f, o[1] + pad + (j / 2) * (mini + pad) + mini / 2f, mini, 1f, false, false)
             }

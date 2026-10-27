@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.LdafScope" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#FF4FD1C5</item>
-        <item name="android:colorPrimary">#FF0F1419</item>
-        <item name="android:colorPrimaryDark">#FF0F1419</item>
-        <item name="android:windowBackground">#FF0F1419</item>
+        <item name="android:colorAccent">#FFFFB224</item>
+        <item name="android:colorPrimary">#FF0D100E</item>
+        <item name="android:colorPrimaryDark">#FF0D100E</item>
+        <item name="android:windowBackground">#FF0D100E</item>
         <item name="android:statusBarColor">#00000000</item>
         <item name="android:navigationBarColor">#00000000</item>
     </style>

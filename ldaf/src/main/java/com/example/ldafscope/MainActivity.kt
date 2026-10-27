@@ -23,13 +23,14 @@ import android.widget.Space
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.Theme
 
 class MainActivity : ComponentActivity(), SensorEventListener, RangeFinder.Callback {
 
     private companion object {
-        const val TEXT = 0xFFE8EAF0.toInt()
-        const val MUTED = 0xFF8B95A5.toInt()
-        const val ACCENT = 0xFF4FD1C5.toInt()
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
         const val SMOOTHING = 5
@@ -41,7 +42,8 @@ class MainActivity : ComponentActivity(), SensorEventListener, RangeFinder.Callb
     private lateinit var distanceLabel: TextView
     private lateinit var stateLabel: TextView
     private lateinit var focusInfo: TextView
-    private lateinit var scanToggle: Button
+    private lateinit var kit: Kit
+    private lateinit var statRows: Map<String, TextView>
     private lateinit var grantButton: Button
     private lateinit var reportView: TextView
 
@@ -65,7 +67,9 @@ class MainActivity : ComponentActivity(), SensorEventListener, RangeFinder.Callb
         super.onCreate(savedInstanceState)
         rangeFinder = RangeFinder(applicationContext).also { it.callback = this }
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        kit = Kit(this, Theme(Palettes.instrument, Fonts.condensed(this)))
         setContentView(buildUi())
+        kit.matchSystemBars(window)
     }
 
     override fun onStart() {
@@ -151,8 +155,10 @@ class MainActivity : ComponentActivity(), SensorEventListener, RangeFinder.Callb
             else -> Float.NaN
         }
         distanceLabel.text = Geometry.format(shown)
-        distanceLabel.setTextColor(if (ok) TEXT else MUTED)
-        stateLabel.text = "Autofocus: ${Geometry.afStateName(r.afState)}  |  lens at %.2f diopters  |  %d points".format(r.diopters, scan.count)
+        distanceLabel.setTextColor(if (ok) kit.c.ink else kit.c.inkSoft)
+        statRows["Autofocus"]?.text = Geometry.afStateName(r.afState)
+        statRows["Lens"]?.text = "%.2f diopters".format(r.diopters)
+        statRows["Points"]?.text = scan.count.toString()
 
         if (scanning && ok && dir != null) {
             scan.add(dir[0] * meters, dir[1] * meters, dir[2] * meters)
@@ -161,119 +167,95 @@ class MainActivity : ComponentActivity(), SensorEventListener, RangeFinder.Callb
 
     // ---------------------------------------------------------------- UI
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun label(s: String, sp: Float, color: Int = TEXT, bold: Boolean = false) = TextView(this).apply {
-        text = s
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-        setTextColor(color)
-        if (bold) setTypeface(typeface, Typeface.BOLD)
-    }
-
-    private fun LinearLayout.gap(dpv: Int) = addView(Space(this@MainActivity), LinearLayout.LayoutParams(1, dp(dpv)))
-
     private fun buildUi(): View {
-        val pad = dp(20)
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val col = kit.column()
 
-        col.addView(label("LDAF Scope", 30f, bold = true))
-        col.addView(label("Point the back of the phone at something and read the distance", 14f, MUTED))
-        col.gap(16)
+        col.addView(kit.title("LDAF Scope"))
+        kit.gap(col, 4)
+        col.addView(kit.caption("Point the back of the phone at something to read how far away it is."))
+        kit.gap(col, 32)
 
-        distanceLabel = label("-", 56f, bold = true)
+        // The reading is the whole point of the app, so it gets the most space and the largest type.
+        distanceLabel = kit.readout("--", 72f, kit.c.inkSoft)
         col.addView(distanceLabel)
-        stateLabel = label("", 13f, MUTED)
+        kit.gap(col, 8)
+        stateLabel = kit.caption("")
         col.addView(stateLabel)
-        focusInfo = label("", 12f, MUTED)
-        col.addView(focusInfo)
-        col.gap(8)
-        grantButton = Button(this).apply {
-            text = "Grant camera access"
-            visibility = View.GONE
-            setOnClickListener { cameraPermission.launch(Manifest.permission.CAMERA) }
+        kit.gap(col, 16)
+
+        val rows = LinkedHashMap<String, TextView>()
+        for (name in listOf("Autofocus", "Lens", "Points")) {
+            val value = kit.readout("--", 14f)
+            rows[name] = value
+            col.addView(statRow(name, value), LinearLayout.LayoutParams(MATCH, WRAP))
         }
+        statRows = rows
+        kit.gap(col, 8)
+        focusInfo = kit.text("", 12f, kit.c.inkSoft, kit.f.mono)
+        col.addView(focusInfo)
+        kit.gap(col, 12)
+        grantButton = kit.button("Allow camera", Kit.Weight.PRIMARY) { cameraPermission.launch(Manifest.permission.CAMERA) }
+            .apply { visibility = View.GONE }
         col.addView(grantButton, LinearLayout.LayoutParams(MATCH, WRAP))
 
+        kit.gap(col, 8)
         col.addView(
-            label(
-                "Android doesn't give apps the raw laser sensor. This reads where the camera's autofocus has " +
-                    "settled, which the phone steers using the laser, so it follows the distance to what you " +
-                    "aim at. Expect it to work best from about 10 cm to a few metres, on textured, " +
-                    "well-lit surfaces. It lags if you move fast.",
-                12f, MUTED,
+            kit.caption(
+                "Android does not give apps the raw laser sensor. This reads where the camera's autofocus has settled, " +
+                    "which the phone steers with the laser. It works best from about 10 cm to a few metres on " +
+                    "textured, well-lit surfaces, and it lags when you move fast.",
             ),
         )
-        col.gap(16)
+        kit.gap(col, 40)
 
-        col.addView(label("Scan map", 18f, bold = true))
-        col.addView(label("Sweep the phone slowly around you. Colour = height: blue low, red high.", 12f, MUTED))
-        col.gap(8)
-        scan = ScanView(this)
-        col.addView(scan, LinearLayout.LayoutParams(MATCH, dp(340)))
-        col.gap(8)
-
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        scanToggle = Button(this).apply {
-            text = "Scanning: on"
-            setOnClickListener {
-                scanning = !scanning
-                text = if (scanning) "Scanning: on" else "Scanning: paused"
-            }
-        }
-        row.addView(scanToggle, LinearLayout.LayoutParams(0, WRAP, 1f))
-        row.addView(
-            Button(this).apply {
-                text = "Clear map"
-                setOnClickListener { scan.clear() }
-            },
-            LinearLayout.LayoutParams(0, WRAP, 1f),
-        )
-        col.addView(row, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(24)
-
-        col.addView(label("Device explorer", 18f, bold = true))
+        col.addView(kit.heading("Scan map"))
+        kit.gap(col, 4)
+        col.addView(kit.caption("Sweep the phone slowly around you. Brighter points are higher up."))
+        kit.gap(col, 12)
+        scan = ScanView(this).also { it.style(kit.c.surface, kit.c.line, kit.c.inkSoft, kit.c.accent, kit.f.mono) }
+        col.addView(scan, LinearLayout.LayoutParams(MATCH, kit.dp(340)))
+        kit.gap(col, 8)
         col.addView(
-            label(
-                "Lists every sensor and camera key this phone shows to apps, to find out whether the laser " +
-                    "sensor is exposed anywhere else. Build it once the live readout is running.",
-                12f, MUTED,
+            kit.toggle("Record points", "Adds a point each time a distance is read.", true) { scanning = it }.view,
+            LinearLayout.LayoutParams(MATCH, WRAP),
+        )
+        kit.gap(col, 8)
+        col.addView(kit.button("Clear map") { scan.clear() }, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 40)
+
+        col.addView(kit.heading("Device explorer"))
+        kit.gap(col, 4)
+        col.addView(
+            kit.caption(
+                "Lists every sensor and camera key this phone shows to apps, to find out whether the laser sensor " +
+                    "is exposed anywhere else.",
             ),
         )
-        col.gap(8)
-        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(
-            Button(this).apply {
-                text = "Build report"
-                setOnClickListener { buildReport() }
-            },
-            LinearLayout.LayoutParams(0, WRAP, 1f),
+        kit.gap(col, 12)
+        col.addView(
+            kit.rowOf(
+                kit.button("Build report") { buildReport() },
+                kit.button("Share report") { shareReport() },
+            ),
+            LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        row2.addView(
-            Button(this).apply {
-                text = "Share report"
-                setOnClickListener { shareReport() }
-            },
-            LinearLayout.LayoutParams(0, WRAP, 1f),
-        )
-        col.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(8)
-        reportView = TextView(this).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-            setTextColor(ACCENT)
-            typeface = Typeface.MONOSPACE
-            setTextIsSelectable(true)
-        }
+        kit.gap(col, 12)
+        reportView = kit.text("", 11f, kit.c.ink, kit.f.mono).apply { setTextIsSelectable(true) }
         col.addView(reportView, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        return ScrollView(this).apply {
-            clipToPadding = false
-            addView(col, ViewGroup.LayoutParams(MATCH, WRAP))
-            setOnApplyWindowInsetsListener { v, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
-                v.setPadding(bars.left + pad, bars.top + pad, bars.right + pad, bars.bottom + pad)
-                WindowInsets.CONSUMED
-            }
-        }
+        return kit.screen(col)
+    }
+
+    /** Name on the left, value on the right, a hairline under each: reads like a spec sheet. */
+    private fun statRow(name: String, value: TextView): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        minimumHeight = kit.dp(40)
+        addView(kit.body(name), LinearLayout.LayoutParams(0, WRAP, 1f))
+        addView(value)
+        background = android.graphics.drawable.LayerDrawable(
+            arrayOf(android.graphics.drawable.ColorDrawable(kit.c.line)),
+        ).apply { setLayerInset(0, 0, kit.dp(40) - 1, 0, 0) }
     }
 
     // ---------------------------------------------------------------- explorer

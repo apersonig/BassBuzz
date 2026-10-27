@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Ultrasonic" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#FFB794F6</item>
-        <item name="android:colorPrimary">#FF12101A</item>
-        <item name="android:colorPrimaryDark">#FF12101A</item>
-        <item name="android:windowBackground">#FF12101A</item>
+    <style name="Theme.Ultrasonic" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#FF1E4FD8</item>
+        <item name="android:colorPrimary">#FFF1F2F4</item>
+        <item name="android:colorPrimaryDark">#FFF1F2F4</item>
+        <item name="android:windowBackground">#FFF1F2F4</item>
         <item name="android:statusBarColor">#00000000</item>
         <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

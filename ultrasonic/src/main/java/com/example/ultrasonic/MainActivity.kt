@@ -23,14 +23,16 @@ import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.Segmented
+import com.example.ui.Theme
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
     private companion object {
-        const val TEXT = 0xFFE8E6F0.toInt()
-        const val MUTED = 0xFF9893A8.toInt()
-        const val ACCENT = 0xFFB794F6.toInt()
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
         const val PREFS = "ultrasonic"
@@ -48,8 +50,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var toneBar: SeekBar
     private lateinit var toneBox: LinearLayout
     private lateinit var sweepBox: LinearLayout
-    private lateinit var toneModeButton: Button
-    private lateinit var sweepModeButton: Button
+    private lateinit var kit: Kit
+    private lateinit var modeSelector: Segmented
     private lateinit var micSwitch: Switch
 
     private var maxHz = 23950
@@ -105,7 +107,9 @@ class MainActivity : ComponentActivity() {
         sweepTo = maxHz
         engine.onStopped = { runOnUiThread { onToneStopped() } }
 
+        kit = Kit(this, Theme(Palettes.bench, Fonts.plex(this)))
         setContentView(buildUi())
+        kit.matchSystemBars(window)
         setMode(sweep = false)
         ui.post(ticker)
         showSafetyNotice()
@@ -128,114 +132,85 @@ class MainActivity : ComponentActivity() {
     private fun showSafetyNotice() {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean("ack", false)) return
-        AlertDialog.Builder(this)
-            .setTitle("Before you start")
-            .setMessage(
-                "Ultrasonic sound is silent to most adults, but not to everyone or everything.\n\n" +
-                    "- Dogs, cats, rodents and other animals hear it clearly and can be distressed by it. " +
-                    "Keep it away from pets.\n" +
-                    "- Younger people may hear tones from about 17 kHz up, and loud tones can be " +
-                    "uncomfortable or cause ringing in the ears.\n" +
-                    "- Never use headphones or earbuds with this, and start with the volume low.\n" +
-                    "- Please don't use it to bother or harm anyone.",
-            )
-            .setCancelable(false)
-            .setPositiveButton("I understand") { _, _ -> prefs.edit().putBoolean("ack", true).apply() }
-            .show()
+        kit.dialog(
+            "Before you start",
+            "Ultrasonic sound is silent to most adults, but not to everyone or everything.\n\n" +
+                "Dogs, cats, rodents and other animals hear it clearly and can be distressed by it, so keep it away from pets.\n\n" +
+                "Younger people may hear tones from about 17 kHz up, and loud tones can be uncomfortable or cause ringing in the ears.\n\n" +
+                "Never use headphones or earbuds with this, and start with the volume low. Please don't use it to bother or harm anyone.",
+            "I understand",
+            cancelable = false,
+        ) { prefs.edit().putBoolean("ack", true).apply() }.show()
     }
 
     // ---------------------------------------------------------------- UI
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun label(s: String, sp: Float, color: Int = TEXT, bold: Boolean = false) = TextView(this).apply {
-        text = s
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-        setTextColor(color)
-        if (bold) setTypeface(typeface, Typeface.BOLD)
-    }
-
-    private fun LinearLayout.gap(dpv: Int) = addView(Space(this@MainActivity), LinearLayout.LayoutParams(1, dp(dpv)))
-
-    private fun button(text: String, onClick: () -> Unit) = Button(this).apply {
-        this.text = text
-        isAllCaps = false
-        setOnClickListener { onClick() }
-    }
-
-    private fun LinearLayout.buttonRow(vararg buttons: Button) {
-        val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
-        for (b in buttons) row.addView(b, LinearLayout.LayoutParams(0, WRAP, 1f))
-        addView(row, LinearLayout.LayoutParams(MATCH, WRAP))
-    }
-
     private fun buildUi(): View {
-        val pad = dp(20)
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val col = kit.column()
 
-        col.addView(label("Ultrasonic Tone", 30f, bold = true))
+        col.addView(kit.title("Ultrasonic Tone"))
+        kit.gap(col, 4)
         col.addView(
-            label(
-                "Plays a pure tone through the speaker. Output rate is ${engine.sampleRate / 1000.0} kHz, so " +
-                    "the highest possible tone is ${maxHz / 1000.0} kHz. Many phone speakers fade out above about 20 kHz.",
-                13f, MUTED,
+            kit.caption(
+                "Output rate is ${engine.sampleRate / 1000.0} kHz, so the highest tone is ${maxHz / 1000.0} kHz. " +
+                    "Many phone speakers fade out above about 20 kHz.",
             ),
         )
-        col.gap(16)
+        kit.gap(col, 32)
 
-        freqLabel = label("", 40f, bold = true)
+        freqLabel = kit.readout("", 48f)
         col.addView(freqLabel)
-        zoneLabel = label("", 14f, ACCENT)
+        kit.gap(col, 4)
+        zoneLabel = kit.text("", 14f, kit.c.accent, kit.f.medium)
         col.addView(zoneLabel)
-        routeLabel = label("", 12f, MUTED)
+        kit.gap(col, 2)
+        routeLabel = kit.caption("")
         col.addView(routeLabel)
-        col.gap(12)
+        kit.gap(col, 16)
 
-        playButton = button("Play") { togglePlay() }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f) }
-        col.addView(playButton, LinearLayout.LayoutParams(MATCH, dp(64)))
-        statusLabel = label("", 13f, MUTED)
+        playButton = kit.button("Play", Kit.Weight.PRIMARY) { togglePlay() }
+        col.addView(playButton, LinearLayout.LayoutParams(MATCH, kit.dp(56)))
+        kit.gap(col, 8)
+        statusLabel = kit.caption("")
         col.addView(statusLabel)
-        col.gap(16)
+        kit.gap(col, 32)
 
-        toneModeButton = button("Steady tone") { setMode(sweep = false) }
-        sweepModeButton = button("Sweep") { setMode(sweep = true) }
-        col.buttonRow(toneModeButton, sweepModeButton)
-        col.gap(12)
+        modeSelector = kit.segmented(listOf("Steady tone", "Sweep"), 0) { setMode(sweep = it == 1) }
+        col.addView(modeSelector.view, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 16)
 
         // ---- steady tone controls
-        toneBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        toneBar = SeekBar(this).apply {
-            max = (maxHz - Dsp.MIN_HZ) / 10
-            progress = (toneHz - Dsp.MIN_HZ) / 10
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                    if (fromUser) setToneHz(Dsp.MIN_HZ + p * 10)
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar) {}
-                override fun onStopTrackingTouch(sb: SeekBar) {}
-            })
-        }
-        toneBox.addView(toneBar, LinearLayout.LayoutParams(MATCH, WRAP))
+        toneBox = kit.column()
+        toneBar = kit.seekBar((maxHz - Dsp.MIN_HZ) / 10, (toneHz - Dsp.MIN_HZ) / 10, { p, fromUser ->
+            if (fromUser) setToneHz(Dsp.MIN_HZ + p * 10)
+        })
+        toneBox.addView(toneBar, LinearLayout.LayoutParams(MATCH, kit.dp(44)))
         val ends = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        ends.addView(label("${Dsp.MIN_HZ / 1000} kHz", 12f, MUTED), LinearLayout.LayoutParams(0, WRAP, 1f))
-        ends.addView(label("${maxHz / 1000.0} kHz", 12f, MUTED))
+        ends.addView(kit.readout("${Dsp.MIN_HZ / 1000} kHz", 12f, kit.c.inkSoft), LinearLayout.LayoutParams(0, WRAP, 1f))
+        ends.addView(kit.readout("${maxHz / 1000.0} kHz", 12f, kit.c.inkSoft))
         toneBox.addView(ends, LinearLayout.LayoutParams(MATCH, WRAP))
-        toneBox.gap(8)
-        toneBox.buttonRow(
-            button("-1k") { setToneHz(toneHz - 1000) },
-            button("-100") { setToneHz(toneHz - 100) },
-            button("-10") { setToneHz(toneHz - 10) },
-            button("+10") { setToneHz(toneHz + 10) },
-            button("+100") { setToneHz(toneHz + 100) },
-            button("+1k") { setToneHz(toneHz + 1000) },
+        kit.gap(toneBox, 12)
+        toneBox.addView(
+            kit.rowOf(
+                kit.button("\u2212100") { setToneHz(toneHz - 100) },
+                kit.button("\u221210") { setToneHz(toneHz - 10) },
+                kit.button("+10") { setToneHz(toneHz + 10) },
+                kit.button("+100") { setToneHz(toneHz + 100) },
+            ),
+            LinearLayout.LayoutParams(MATCH, WRAP),
         )
+        kit.gap(toneBox, 16)
+        toneBox.addView(kit.caption("Presets"))
+        kit.gap(toneBox, 8)
         val presets = listOf(18000, 20000, 22000, 23000).filter { it <= maxHz }
-        toneBox.buttonRow(*presets.map { hz -> button("${hz / 1000} kHz") { setToneHz(hz) } }.toTypedArray())
+        toneBox.addView(
+            kit.rowOf(*presets.map { hz -> kit.button("${hz / 1000}k") { setToneHz(hz) } }.toTypedArray()),
+            LinearLayout.LayoutParams(MATCH, WRAP),
+        )
         col.addView(toneBox, LinearLayout.LayoutParams(MATCH, WRAP))
 
         // ---- sweep controls
-        sweepBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        sweepBox = kit.column()
         addSlider(sweepBox, "Start", Dsp.MIN_HZ.toFloat(), maxHz.toFloat(), sweepFrom.toFloat(), { hzText(roundTo100(it)) }) {
             sweepFrom = roundTo100(it)
             sync()
@@ -248,28 +223,24 @@ class MainActivity : ComponentActivity() {
             sweepSeconds = it.roundToInt().coerceAtLeast(1)
             sync()
         }
-        sweepBox.addView(label("The sweep repeats until you stop it. End lower than start sweeps downwards.", 12f, MUTED))
+        sweepBox.addView(kit.caption("The sweep repeats until you stop it. An end below the start sweeps downwards."))
         col.addView(sweepBox, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        col.gap(16)
-        addSlider(col, "Volume", 0f, 1f, volume, { "${(it * 100).roundToInt()}%" }) {
+        kit.gap(col, 32)
+        col.addView(kit.heading("Output"))
+        kit.gap(col, 12)
+        addSlider(col, "Volume", 0f, 1f, volume, { "${(it * 100).roundToInt()}%" }, "The phone's media volume also applies.") {
             volume = it
             sync()
         }
-        col.addView(label("This is the app's level. The phone's media volume also applies.", 12f, MUTED))
-        col.gap(16)
-
         col.addView(
-            Switch(this).apply {
-                text = "Pulsed (on/off) instead of continuous"
-                setTextColor(TEXT)
-                setOnCheckedChangeListener { _, on ->
-                    pulseOn = on
-                    sync()
-                }
-            },
+            kit.toggle("Pulsed", "Switch on and off instead of playing continuously.") { on ->
+                pulseOn = on
+                sync()
+            }.view,
+            LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(4)
+        kit.gap(col, 8)
         addSlider(col, "Pulse period", 100f, 2000f, pulseMs.toFloat(), { "${it.roundToInt()} ms" }) {
             pulseMs = it.roundToInt()
             sync()
@@ -282,43 +253,33 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        col.gap(8)
-        col.addView(label("Mic check", 18f, bold = true))
+        kit.gap(col, 32)
+        col.addView(kit.heading("Mic check"))
+        kit.gap(col, 4)
         col.addView(
-            label(
-                "You can't hear this, so how do you know it's working? Turn this on and the microphone measures " +
-                    "the tone against the background noise. Phone mics also fade out near 20 kHz, so a weak " +
-                    "reading doesn't prove the speaker is silent.",
-                12f, MUTED,
+            kit.caption(
+                "You can't hear this, so how do you know it works? With this on, the microphone measures the tone " +
+                    "against the background noise. Phone mics also fade out near 20 kHz, so a weak reading does " +
+                    "not prove the speaker is silent.",
             ),
         )
-        micSwitch = Switch(this).apply {
-            text = "Measure the tone with the microphone"
-            setTextColor(TEXT)
-            setOnCheckedChangeListener { _, on -> onMicSwitch(on) }
-        }
-        col.addView(micSwitch)
-        micLabel = label("", 14f, ACCENT)
+        kit.gap(col, 8)
+        val micToggle = kit.toggle("Measure with the microphone") { on -> onMicSwitch(on) }
+        micSwitch = micToggle.switch
+        col.addView(micToggle.view, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 4)
+        micLabel = kit.text("", 14f, kit.c.accent, kit.f.medium)
         col.addView(micLabel)
 
-        col.gap(24)
+        kit.gap(col, 32)
         col.addView(
-            label(
+            kit.caption(
                 "Safety: keep the phone away from ears, babies and pets, don't use headphones, and keep the " +
                     "volume low. Playback stops when you leave the app.",
-                12f, MUTED,
             ),
         )
 
-        return ScrollView(this).apply {
-            clipToPadding = false
-            addView(col, ViewGroup.LayoutParams(MATCH, WRAP))
-            setOnApplyWindowInsetsListener { v, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
-                v.setPadding(bars.left + pad, bars.top + pad, bars.right + pad, bars.bottom + pad)
-                WindowInsets.CONSUMED
-            }
-        }
+        return kit.screen(col)
     }
 
     private fun addSlider(
@@ -328,31 +289,11 @@ class MainActivity : ComponentActivity() {
         hi: Float,
         initial: Float,
         fmt: (Float) -> String,
+        hint: String? = null,
         onChange: (Float) -> Unit,
     ) {
-        val text = label("", 14f)
-        fun refresh(v: Float) {
-            text.text = "$title: ${fmt(v)}"
-        }
-        refresh(initial)
-
-        val bar = SeekBar(this).apply {
-            max = 1000
-            progress = ((initial - lo) / (hi - lo) * 1000).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                    val v = lo + (hi - lo) * p / 1000f
-                    refresh(v)
-                    if (fromUser) onChange(v)
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar) {}
-                override fun onStopTrackingTouch(sb: SeekBar) {}
-            })
-        }
-        parent.addView(text)
-        parent.addView(bar, LinearLayout.LayoutParams(MATCH, WRAP))
-        parent.gap(8)
+        parent.addView(kit.slider(title, lo, hi, initial, fmt, hint, onChange).view, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(parent, 16)
     }
 
     private fun roundTo100(v: Float): Int = ((v / 100f).roundToInt() * 100).coerceIn(Dsp.MIN_HZ, maxHz)
@@ -365,8 +306,7 @@ class MainActivity : ComponentActivity() {
         sweepMode = sweep
         toneBox.visibility = if (sweep) View.GONE else View.VISIBLE
         sweepBox.visibility = if (sweep) View.VISIBLE else View.GONE
-        toneModeButton.alpha = if (sweep) 0.5f else 1f
-        sweepModeButton.alpha = if (sweep) 1f else 0.5f
+        modeSelector.select(if (sweep) 1 else 0)
         sync()
     }
 
