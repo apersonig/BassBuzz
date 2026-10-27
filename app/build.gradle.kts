@@ -32,6 +32,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":ui"))
     implementation(project(":core"))
     implementation("androidx.activity:activity-ktx:1.9.3")
 }

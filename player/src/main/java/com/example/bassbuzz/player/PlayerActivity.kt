@@ -6,38 +6,35 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.SeekBar
-import android.widget.Space
-import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.bassbuzz.EnvelopeView
 import com.example.bassbuzz.HapticSettings
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.Theme
 
 class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
 
     private companion object {
-        const val TEXT = 0xFFE8EAF0.toInt()
-        const val MUTED = 0xFF9AA0AE.toInt()
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
     }
 
+    private lateinit var kit: Kit
     private lateinit var envelope: EnvelopeView
     private lateinit var fileLabel: TextView
     private lateinit var statusLabel: TextView
@@ -89,7 +86,9 @@ class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         loadPrefs()
+        kit = Kit(this, Theme(Palettes.paper, Fonts.plex(this)))
         setContentView(buildUi())
+        kit.matchSystemBars(window)
         handleIntent(intent)
         refreshUi()
     }
@@ -183,16 +182,7 @@ class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
 
     // ---------------------------------------------------------------- UI
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun label(s: String, sp: Float, color: Int = TEXT, bold: Boolean = false) = TextView(this).apply {
-        text = s
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-        setTextColor(color)
-        if (bold) setTypeface(typeface, Typeface.BOLD)
-    }
-
-    private fun LinearLayout.gap(dpv: Int) = addView(Space(this@PlayerActivity), LinearLayout.LayoutParams(1, dp(dpv)))
+    private fun dp(v: Int) = kit.dp(v)
 
     private fun fmt(ms: Int): String {
         val s = ms / 1000
@@ -200,50 +190,44 @@ class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
     }
 
     private fun buildUi(): View {
-        val pad = dp(20)
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val col = kit.column()
 
-        col.addView(label("BassBuzz Player", 30f, bold = true))
-        col.addView(label("Plays .bbz haptic files: music plus the bass in your motor", 14f, MUTED))
-        col.gap(20)
+        col.addView(kit.title("BassBuzz Player"))
+        kit.gap(col, 4)
+        col.addView(kit.caption("Plays .bbz files: the music, and the bass in your vibration motor."))
+        kit.gap(col, 32)
 
-        fileLabel = label("No file loaded", 16f)
+        col.addView(kit.heading("Song"))
+        kit.gap(col, 12)
+        fileLabel = kit.text("No file open", 17f, kit.c.ink, kit.f.medium)
         col.addView(fileLabel)
-        col.gap(8)
-        col.addView(
-            Button(this).apply {
-                text = "Open haptic file (.bbz)"
-                setOnClickListener { picker.launch(arrayOf("*/*")) }
-            },
-            LinearLayout.LayoutParams(MATCH, WRAP),
-        )
-        col.gap(12)
+        kit.gap(col, 12)
+        col.addView(kit.button("Open haptic file (.bbz)") { picker.launch(arrayOf("*/*")) }, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 16)
 
         envelope = EnvelopeView(this).apply {
             hint = "Open a .bbz file to begin"
+            setColors(kit.c.accent, kit.c.line, kit.c.inkSoft, kit.f.regular)
             onSeek = { f ->
                 service?.let { s -> s.seek((f * s.player.durationMs).toInt()) }
                 updateProgress()
             }
         }
-        col.addView(envelope, LinearLayout.LayoutParams(MATCH, dp(140)))
-        timeLabel = label("0:00 / 0:00", 14f, MUTED)
-        col.addView(timeLabel)
-        col.gap(8)
+        col.addView(envelope, LinearLayout.LayoutParams(MATCH, dp(120)))
+        kit.gap(col, 8)
+        timeLabel = kit.readout("0:00 / 0:00", 14f, kit.c.inkSoft).apply { gravity = Gravity.END }
+        col.addView(timeLabel, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 16)
 
-        playButton = Button(this).apply {
-            text = "Play"
-            isEnabled = false
-            setOnClickListener { togglePlay() }
-        }
-        col.addView(playButton, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(8)
-        statusLabel = label("", 13f, MUTED)
+        playButton = kit.button("Play", Kit.Weight.PRIMARY) { togglePlay() }.apply { isEnabled = false }
+        col.addView(playButton, LinearLayout.LayoutParams(MATCH, dp(56)))
+        kit.gap(col, 12)
+        statusLabel = kit.caption("")
         col.addView(statusLabel)
-        col.gap(24)
+        kit.gap(col, 40)
 
-        col.addView(label("Haptic tuning", 18f, bold = true))
-        col.gap(8)
+        col.addView(kit.heading("Haptic tuning"))
+        kit.gap(col, 12)
         addSlider(col, "Intensity", 0.2f, 2.0f, settings.intensity, { "${(it * 100).toInt()}%" }) {
             settings = settings.copy(intensity = it)
             settingsChanged()
@@ -257,51 +241,31 @@ class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
             settingsChanged()
         }
         addSlider(
-            col, "Timing (raise it if the buzz comes after the music; Bluetooth earbuds need negative)",
-            -200f, 300f, settings.offsetMs.toFloat(), { "${it.toInt()} ms" },
+            col, "Timing", -200f, 300f, settings.offsetMs.toFloat(), { "${it.toInt()} ms" },
+            hint = "Raise it if the buzz comes after the music. Bluetooth earbuds usually need a negative value.",
         ) {
             settings = settings.copy(offsetMs = it.toInt())
             settingsChanged()
         }
 
-        col.gap(8)
         col.addView(
-            Switch(this).apply {
-                text = "Background-proof mode (use if the buzz stops when the screen is off)"
-                setTextColor(TEXT)
-                isChecked = compat
-                setOnCheckedChangeListener { _, on ->
-                    compat = on
-                    settingsChanged()
-                }
-            },
-        )
-        col.gap(12)
-        col.addView(
-            Button(this).apply {
-                text = "Test motor"
-                setOnClickListener { service?.player?.testBuzz() }
-            },
+            kit.toggle("Background-proof mode", "Turn this on if the buzz stops when the screen is off.", compat) { on ->
+                compat = on
+                settingsChanged()
+            }.view,
             LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(12)
+        kit.gap(col, 12)
+        col.addView(kit.button("Test motor") { service?.player?.testBuzz() }, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 12)
         col.addView(
-            label(
+            kit.caption(
                 "Playback and haptics continue in the background and with the screen off. " +
                     "Control them from the notification. Stop in the notification ends the session.",
-                12f, MUTED,
             ),
         )
 
-        return ScrollView(this).apply {
-            clipToPadding = false
-            addView(col, ViewGroup.LayoutParams(MATCH, WRAP))
-            setOnApplyWindowInsetsListener { v, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
-                v.setPadding(bars.left + pad, bars.top + pad, bars.right + pad, bars.bottom + pad)
-                WindowInsets.CONSUMED
-            }
-        }
+        return kit.screen(col)
     }
 
     private fun addSlider(
@@ -311,31 +275,11 @@ class PlayerActivity : ComponentActivity(), PlaybackService.Listener {
         hi: Float,
         initial: Float,
         fmt: (Float) -> String,
+        hint: String? = null,
         onChange: (Float) -> Unit,
     ) {
-        val text = label("", 14f)
-        fun refresh(v: Float) {
-            text.text = "$title: ${fmt(v)}"
-        }
-        refresh(initial)
-
-        val bar = SeekBar(this).apply {
-            max = 1000
-            progress = ((initial - lo) / (hi - lo) * 1000).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                    val v = lo + (hi - lo) * p / 1000f
-                    refresh(v)
-                    if (fromUser) onChange(v)
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar) {}
-                override fun onStopTrackingTouch(sb: SeekBar) {}
-            })
-        }
-        parent.addView(text)
-        parent.addView(bar, LinearLayout.LayoutParams(MATCH, WRAP))
-        parent.gap(10)
+        parent.addView(kit.slider(title, lo, hi, initial, fmt, hint, onChange).view, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(parent, 16)
     }
 
     private fun refreshUi() {

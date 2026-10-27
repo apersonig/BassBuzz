@@ -1,38 +1,34 @@
 package com.example.bassbuzz
 
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
-import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Space
-import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.ui.Fonts
+import com.example.ui.Kit
+import com.example.ui.Palettes
+import com.example.ui.Theme
 import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
 
     private companion object {
-        const val TEXT = 0xFFE8EAF0.toInt()
-        const val MUTED = 0xFF9AA0AE.toInt()
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
     }
 
+    private lateinit var kit: Kit
     private lateinit var player: HapticPlayer
     private lateinit var tester: FrequencyTester
     private lateinit var testToggle: Button
@@ -85,7 +81,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        kit = Kit(this, Theme(Palettes.paper, Fonts.plex(this)))
         setContentView(buildUi())
+        kit.matchSystemBars(window)
         ui.post(ticker)
         setStatus(
             when {
@@ -114,127 +112,89 @@ class MainActivity : ComponentActivity() {
 
     // ---------------------------------------------------------------- UI
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun label(s: String, sp: Float, color: Int = TEXT, bold: Boolean = false) = TextView(this).apply {
-        text = s
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-        setTextColor(color)
-        if (bold) setTypeface(typeface, Typeface.BOLD)
-    }
-
-    private fun LinearLayout.gap(dpv: Int) = addView(Space(this@MainActivity), LinearLayout.LayoutParams(1, dp(dpv)))
+    private fun dp(v: Int) = kit.dp(v)
 
     private fun buildUi(): View {
-        val pad = dp(20)
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val col = kit.column()
 
-        col.addView(label("BassBuzz", 30f, bold = true))
-        col.addView(label("Feel the bass of your music in the vibration motor", 14f, MUTED))
-        col.gap(20)
+        col.addView(kit.title("BassBuzz"))
+        kit.gap(col, 4)
+        col.addView(kit.caption("Plays music and sends the bass to the vibration motor."))
+        kit.gap(col, 32)
 
-        fileLabel = label("No file loaded", 16f)
+        col.addView(kit.heading("Song"))
+        kit.gap(col, 12)
+        fileLabel = kit.text("No song open", 17f, kit.c.ink, kit.f.medium)
         col.addView(fileLabel)
-        col.gap(8)
-        col.addView(
-            Button(this).apply {
-                text = "Open audio file"
-                setOnClickListener { picker.launch(arrayOf("audio/*")) }
-            },
-            LinearLayout.LayoutParams(MATCH, WRAP),
-        )
-        col.gap(12)
+        kit.gap(col, 12)
+        col.addView(kit.button("Open audio file") { picker.launch(arrayOf("audio/*")) }, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 16)
 
         envelope = EnvelopeView(this).apply {
+            setColors(kit.c.accent, kit.c.line, kit.c.inkSoft, kit.f.regular)
             onSeek = { f ->
                 player.seekTo((f * player.durationMs).toInt())
                 updateProgress()
             }
         }
-        col.addView(envelope, LinearLayout.LayoutParams(MATCH, dp(140)))
-        timeLabel = label("0:00 / 0:00", 14f, MUTED)
-        col.addView(timeLabel)
-        col.gap(8)
+        col.addView(envelope, LinearLayout.LayoutParams(MATCH, dp(120)))
+        kit.gap(col, 8)
+        timeLabel = kit.readout("0:00 / 0:00", 14f, kit.c.inkSoft).apply { gravity = Gravity.END }
+        col.addView(timeLabel, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 16)
 
-        playButton = Button(this).apply {
-            text = "Play"
-            isEnabled = false
-            setOnClickListener { togglePlay() }
-        }
-        col.addView(playButton, LinearLayout.LayoutParams(MATCH, WRAP))
-        exportButton = Button(this).apply {
-            text = "Export haptic file (.bbz)"
-            isEnabled = false
-            setOnClickListener { startExport() }
-        }
+        playButton = kit.button("Play", Kit.Weight.PRIMARY) { togglePlay() }.apply { isEnabled = false }
+        col.addView(playButton, LinearLayout.LayoutParams(MATCH, dp(56)))
+        kit.gap(col, 8)
+        exportButton = kit.button("Export haptic file (.bbz)") { startExport() }.apply { isEnabled = false }
         col.addView(exportButton, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(8)
-        statusLabel = label("", 13f, MUTED)
+        kit.gap(col, 12)
+        statusLabel = kit.caption("")
         col.addView(statusLabel)
-        col.gap(24)
+        kit.gap(col, 40)
 
-        col.addView(label("Haptic tuning", 18f, bold = true))
-        col.gap(8)
-        addSlider(col, "Intensity", 0.2f, 2.0f, settings.intensity, { "${(it * 100).toInt()}%" }, {
+        col.addView(kit.heading("Haptic tuning"))
+        kit.gap(col, 12)
+        addSlider(col, "Intensity", 0.2f, 2.0f, settings.intensity, { "${(it * 100).toInt()}%" }) {
             settings = settings.copy(intensity = it)
             player.settings = settings
-        })
-        addSlider(col, "Noise gate", 0f, 0.6f, settings.gate, { "${(it * 100).toInt()}%" }, {
+        }
+        addSlider(col, "Noise gate", 0f, 0.6f, settings.gate, { "${(it * 100).toInt()}%" }) {
             settings = settings.copy(gate = it)
             player.settings = settings
-        })
-        addSlider(col, "Punch on hits", 0f, 2f, settings.punch, { "${(it * 100).toInt()}%" }, {
+        }
+        addSlider(col, "Punch on hits", 0f, 2f, settings.punch, { "${(it * 100).toInt()}%" }) {
             settings = settings.copy(punch = it)
             player.settings = settings
-        })
+        }
         addSlider(
-            col, "Timing (raise it if the buzz lags the music)", -200f, 300f, settings.offsetMs.toFloat(),
-            { "${it.toInt()} ms" },
-            {
-                settings = settings.copy(offsetMs = it.toInt())
-                player.settings = settings
-            },
-        )
+            col, "Timing", -200f, 300f, settings.offsetMs.toFloat(), { "${it.toInt()} ms" },
+            hint = "Raise it if the buzz comes after the music.",
+        ) {
+            settings = settings.copy(offsetMs = it.toInt())
+            player.settings = settings
+        }
         addSlider(
-            col, "Bass range (re-analyses when released)", 60f, 250f, cutoffHz.toFloat(),
-            { "up to ${it.toInt()} Hz" },
-            { cutoffHz = it.toInt() },
+            col, "Bass range", 60f, 250f, cutoffHz.toFloat(), { "up to ${it.toInt()} Hz" },
+            hint = "The song is analysed again when you let go.",
             onCommit = { currentUri?.let { u -> analyze(u) } },
-        )
+        ) { cutoffHz = it.toInt() }
 
-        col.gap(8)
         col.addView(
-            Switch(this).apply {
-                text = "Compatibility mode (use if you feel nothing)"
-                setTextColor(TEXT)
-                setOnCheckedChangeListener { _, on ->
-                    player.compat = on
-                    tester.compat = on
-                }
-            },
-        )
-        col.gap(12)
-        col.addView(
-            Button(this).apply {
-                text = "Test motor"
-                setOnClickListener { player.testBuzz() }
-            },
+            kit.toggle("Compatibility mode", "Turn this on if you feel nothing.") { on ->
+                player.compat = on
+                tester.compat = on
+            }.view,
             LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(12)
-        col.addView(label("Keep the app in front while playing: the screen stays on and haptics pause if you leave.", 12f, MUTED))
+        kit.gap(col, 12)
+        col.addView(kit.button("Test motor") { player.testBuzz() }, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(col, 12)
+        col.addView(kit.caption("Keep the app in front while playing. The screen stays on, and the buzz pauses if you leave."))
 
         addFrequencyTester(col)
 
-        return ScrollView(this).apply {
-            clipToPadding = false
-            addView(col, ViewGroup.LayoutParams(MATCH, WRAP))
-            setOnApplyWindowInsetsListener { v, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
-                v.setPadding(bars.left + pad, bars.top + pad, bars.right + pad, bars.bottom + pad)
-                WindowInsets.CONSUMED
-            }
-        }
+        return kit.screen(col)
     }
 
     private fun addSlider(
@@ -244,35 +204,12 @@ class MainActivity : ComponentActivity() {
         hi: Float,
         initial: Float,
         fmt: (Float) -> String,
-        onChange: (Float) -> Unit,
+        hint: String? = null,
         onCommit: (() -> Unit)? = null,
+        onChange: (Float) -> Unit,
     ) {
-        val text = label("", 14f)
-        fun refresh(v: Float) {
-            text.text = "$title: ${fmt(v)}"
-        }
-        refresh(initial)
-
-        val bar = SeekBar(this).apply {
-            this.max = 1000
-            progress = ((initial - lo) / (hi - lo) * 1000).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                    val v = lo + (hi - lo) * p / 1000f
-                    refresh(v)
-                    onChange(v)
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar) {}
-
-                override fun onStopTrackingTouch(sb: SeekBar) {
-                    onCommit?.invoke()
-                }
-            })
-        }
-        parent.addView(text)
-        parent.addView(bar, LinearLayout.LayoutParams(MATCH, WRAP))
-        parent.gap(10)
+        parent.addView(kit.slider(title, lo, hi, initial, fmt, hint, onChange, onCommit).view, LinearLayout.LayoutParams(MATCH, WRAP))
+        kit.gap(parent, 16)
     }
 
     private fun setStatus(s: String) {
@@ -349,112 +286,83 @@ class MainActivity : ComponentActivity() {
     // ---------------------------------------------------------------- frequency tester
 
     private fun addFrequencyTester(col: LinearLayout) {
-        col.gap(28)
-        col.addView(label("Frequency tester", 18f, bold = true))
-        col.gap(4)
-        col.addView(label(tester.motorInfo(), 12f, MUTED))
-        col.gap(12)
+        kit.gap(col, 40)
+        col.addView(kit.heading("Frequency tester"))
+        kit.gap(col, 4)
+        col.addView(kit.caption(tester.motorInfo()))
+        kit.gap(col, 16)
 
-        testFreqLabel = label("", 34f, bold = true)
+        testFreqLabel = kit.readout("", 44f)
         col.addView(testFreqLabel)
-        testPlanLabel = label("", 13f, MUTED)
+        kit.gap(col, 4)
+        testPlanLabel = kit.caption("")
         col.addView(testPlanLabel)
-        col.gap(8)
+        kit.gap(col, 8)
 
-        testBar = SeekBar(this).apply {
-            max = TEST_MAX_HZ - TEST_MIN_HZ
-            progress = testHz - TEST_MIN_HZ
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                    if (fromUser) setTestHz(p + TEST_MIN_HZ)
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar) {}
-                override fun onStopTrackingTouch(sb: SeekBar) {}
-            })
-        }
-        col.addView(testBar, LinearLayout.LayoutParams(MATCH, WRAP))
+        testBar = kit.seekBar(TEST_MAX_HZ - TEST_MIN_HZ, testHz - TEST_MIN_HZ, { p, fromUser ->
+            if (fromUser) setTestHz(p + TEST_MIN_HZ)
+        })
+        col.addView(testBar, LinearLayout.LayoutParams(MATCH, dp(44)))
 
         val range = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        range.addView(label("$TEST_MIN_HZ Hz", 12f, MUTED), LinearLayout.LayoutParams(0, WRAP, 1f))
-        range.addView(label("$TEST_MAX_HZ Hz", 12f, MUTED))
+        range.addView(kit.readout("$TEST_MIN_HZ Hz", 12f, kit.c.inkSoft), LinearLayout.LayoutParams(0, WRAP, 1f))
+        range.addView(kit.readout("$TEST_MAX_HZ Hz", 12f, kit.c.inkSoft))
         col.addView(range, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(8)
-
-        val fine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun step(text: String, delta: Int) = Button(this).apply {
-            this.text = text
-            setOnClickListener { setTestHz(testHz + delta) }
-        }
-        fine.addView(step("-10", -10), LinearLayout.LayoutParams(0, WRAP, 1f))
-        fine.addView(step("-1", -1), LinearLayout.LayoutParams(0, WRAP, 1f))
-        fine.addView(step("+1", 1), LinearLayout.LayoutParams(0, WRAP, 1f))
-        fine.addView(step("+10", 10), LinearLayout.LayoutParams(0, WRAP, 1f))
-        col.addView(fine, LinearLayout.LayoutParams(MATCH, WRAP))
-        col.gap(8)
+        kit.gap(col, 12)
 
         col.addView(
-            Button(this).apply {
-                text = "Start vibration"
-                testToggle = this
-                setOnClickListener { toggleTester() }
-            },
+            kit.rowOf(
+                kit.button("\u221210") { setTestHz(testHz - 10) },
+                kit.button("\u22121") { setTestHz(testHz - 1) },
+                kit.button("+1") { setTestHz(testHz + 1) },
+                kit.button("+10") { setTestHz(testHz + 10) },
+            ),
             LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(10)
-        addSlider(col, "Test strength", 0.05f, 1f, tester.strength, { "${(it * 100).toInt()}%" }, {
+        kit.gap(col, 12)
+
+        testToggle = kit.button("Start vibration", Kit.Weight.PRIMARY) { toggleTester() }
+        col.addView(testToggle, LinearLayout.LayoutParams(MATCH, dp(56)))
+        kit.gap(col, 20)
+
+        addSlider(col, "Test strength", 0.05f, 1f, tester.strength, { "${(it * 100).toInt()}%" }) {
             tester.strength = it
             tester.update()
-        })
+        }
 
         col.addView(
-            Switch(this).apply {
-                text = "Subwoofer roll-off (quieter at low frequencies)"
-                setTextColor(TEXT)
-                isChecked = tester.rolloffEnabled
-                setOnCheckedChangeListener { _, on ->
-                    tester.rolloffEnabled = on
-                    tester.update()
-                    refreshTestUi()
-                }
-            },
+            kit.toggle("Subwoofer roll-off", "Quieter at low frequencies, like a real subwoofer.", tester.rolloffEnabled) { on ->
+                tester.rolloffEnabled = on
+                tester.update()
+                refreshTestUi()
+            }.view,
+            LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(8)
-        addSlider(col, "Roll-off corner (-12 dB per octave below it)", 20f, 300f, tester.rolloffCornerHz, { "${it.toInt()} Hz" }, {
+        kit.gap(col, 8)
+        addSlider(
+            col, "Roll-off corner", 20f, 300f, tester.rolloffCornerHz, { "${it.toInt()} Hz" },
+            hint = "Below this the level falls by 12 dB per octave.",
+        ) {
             tester.rolloffCornerHz = it
             tester.update()
             refreshTestUi()
-        })
+        }
 
-        col.addView(label("Above the motor's range", 14f))
-        col.gap(4)
+        col.addView(kit.body("Above the motor's range"))
+        kit.gap(col, 8)
         val choices = listOf(
             "Silent" to AboveRange.SILENT,
             "Clamp to max" to AboveRange.CLAMP,
             "Force anyway" to AboveRange.FORCE,
         )
         col.addView(
-            RadioGroup(this).apply {
-                orientation = RadioGroup.HORIZONTAL
-                choices.forEachIndexed { i, (name, mode) ->
-                    addView(
-                        RadioButton(this@MainActivity).apply {
-                            id = 1000 + i
-                            text = name
-                            setTextColor(TEXT)
-                            isChecked = tester.aboveRange == mode
-                        },
-                    )
-                }
-                setOnCheckedChangeListener { _, id ->
-                    val picked = choices.getOrNull(id - 1000) ?: return@setOnCheckedChangeListener
-                    tester.aboveRange = picked.second
-                    tester.update()
-                    refreshTestUi()
-                }
-            },
+            kit.segmented(choices.map { it.first }, choices.indexOfFirst { it.second == tester.aboveRange }.coerceAtLeast(0)) { i ->
+                tester.aboveRange = choices[i].second
+                tester.update()
+                refreshTestUi()
+            }.view,
+            LinearLayout.LayoutParams(MATCH, WRAP),
         )
-        col.gap(16)
 
         tester.frequencyHz = testHz.toFloat()
         refreshTestUi()

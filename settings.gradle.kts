@@ -15,6 +15,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "BassBuzz"
+include(":ui")
 include(":core")
 include(":app")
 include(":player")

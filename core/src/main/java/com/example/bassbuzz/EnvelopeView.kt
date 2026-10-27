@@ -34,12 +34,21 @@ class EnvelopeView(context: Context) : View(context) {
     var dragging = false
         private set
 
-    private val played = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF7A59.toInt() }
-    private val unplayed = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF4B5160.toInt() }
+    private val played = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC23B22.toInt() }
+    private val unplayed = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF8F8672.toInt() }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF9AA0AE.toInt()
+        color = 0xFF5E584B.toInt()
         textAlign = Paint.Align.CENTER
         textSize = 14f * resources.displayMetrics.scaledDensity
+    }
+
+    /** Colour of the part that has played, of the part still to come, and of the hint text. */
+    fun setColors(playedColor: Int, unplayedColor: Int, hintColor: Int, hintFont: android.graphics.Typeface? = null) {
+        played.color = playedColor
+        unplayed.color = unplayedColor
+        textPaint.color = hintColor
+        if (hintFont != null) textPaint.typeface = hintFont
+        invalidate()
     }
 
     private fun dp(v: Float) = v * resources.displayMetrics.density
@@ -53,8 +62,8 @@ class EnvelopeView(context: Context) : View(context) {
             return
         }
 
-        val barW = dp(3f)
-        val step = barW + dp(1.5f)
+        val barW = dp(2f)
+        val step = barW + dp(2f)
         val bars = max(1, (w / step).toInt())
         val mid = h / 2f
         val playedBars = (progress * bars).toInt()
@@ -66,10 +75,7 @@ class EnvelopeView(context: Context) : View(context) {
             for (i in from until to) if (lv[i] > m) m = lv[i]
             val bh = max(dp(2f), min(1f, m) * h * 0.92f)
             val x = b * step
-            canvas.drawRoundRect(
-                x, mid - bh / 2f, x + barW, mid + bh / 2f, barW / 2f, barW / 2f,
-                if (b < playedBars) played else unplayed,
-            )
+            canvas.drawRect(x, mid - bh / 2f, x + barW, mid + bh / 2f, if (b < playedBars) played else unplayed)
         }
     }
 

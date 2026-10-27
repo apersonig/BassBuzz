@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.BassBuzzPlayer" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#FFFF7A59</item>
-        <item name="android:colorPrimary">#FF14161C</item>
-        <item name="android:colorPrimaryDark">#FF14161C</item>
-        <item name="android:windowBackground">#FF14161C</item>
+    <style name="Theme.BassBuzzPlayer" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#FFC23B22</item>
+        <item name="android:colorPrimary">#FFF4F0E8</item>
+        <item name="android:colorPrimaryDark">#FFF4F0E8</item>
+        <item name="android:windowBackground">#FFF4F0E8</item>
         <item name="android:statusBarColor">#00000000</item>
         <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
