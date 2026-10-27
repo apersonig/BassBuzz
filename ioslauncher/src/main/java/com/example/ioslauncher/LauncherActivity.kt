@@ -87,8 +87,8 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
             background = GradientDrawable().apply { cornerRadius = 40 * d; setColor(kit.c.surface) }
             setOnClickListener { onClick() }
         }
-        undoButton = pill("↶ Undo") { home.undo(); refreshEditBar() }
-        redoButton = pill("↷ Redo") { home.redo(); refreshEditBar() }
+        undoButton = pill("Undo") { home.undo(); refreshEditBar() }
+        redoButton = pill("Redo") { home.redo(); refreshEditBar() }
         val spacer = View(this)
         editBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -351,11 +351,11 @@ class LauncherActivity : ComponentActivity(), HomeView.Listener {
         }
         val actions = ArrayList<MenuRow>()
         if (inLibrary && home.isHidden(app.key)) {
-            actions.add(MenuRow("Add to Home Screen", "+") { home.addToHome(app.key); closeOverlay() })
+            actions.add(MenuRow("Add to Home Screen") { home.addToHome(app.key); closeOverlay() })
         }
-        if (!inLibrary) actions.add(MenuRow("Edit Home Screen", "✎") { home.enterEdit() })
-        actions.add(MenuRow("App Info", "ⓘ") { try { repo.showAppInfo(app, bounds) } catch (_: Exception) {} })
-        actions.add(MenuRow("Delete App", "−", destructive = true) {
+        if (!inLibrary) actions.add(MenuRow("Edit Home Screen") { home.enterEdit() })
+        actions.add(MenuRow("App Info") { try { repo.showAppInfo(app, bounds) } catch (_: Exception) {} })
+        actions.add(MenuRow("Delete App", destructive = true) {
             startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
         })
         showHoldMenu(app, bounds, shortcuts, actions)
